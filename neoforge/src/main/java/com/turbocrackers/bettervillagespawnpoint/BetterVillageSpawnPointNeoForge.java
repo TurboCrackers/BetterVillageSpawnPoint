@@ -4,30 +4,30 @@ import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.common.Mod;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
 
 import java.util.Objects;
 
 @Mod(Constants.MOD_ID)
-public class BetterVillageSpawnPointForge
+public class BetterVillageSpawnPointNeoForge
 {
-    public BetterVillageSpawnPointForge()
+
+    public BetterVillageSpawnPointNeoForge(ModContainer container)
     {
         // Init our common class
         CommonClass.init();
 
         // Load config
-        CommonClass.m_Config = new ForgeConfig();
-        ModLoadingContext context = ModLoadingContext.get();
-        ((ForgeConfig)CommonClass.m_Config).RegisterConfig(context);
+        CommonClass.m_Config = new NeoForgeConfig();
+        ((NeoForgeConfig)CommonClass.m_Config).RegisterConfig(container);
 
-        // Start listening for Forge events.
-        MinecraftForge.EVENT_BUS.register(this);
+        // Start listening for NeoForge events.
+        NeoForge.EVENT_BUS.register(this);
     }
 
     @SubscribeEvent

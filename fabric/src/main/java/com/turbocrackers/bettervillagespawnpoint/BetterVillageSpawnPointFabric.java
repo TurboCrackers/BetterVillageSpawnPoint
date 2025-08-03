@@ -2,7 +2,7 @@ package com.turbocrackers.bettervillagespawnpoint;
 
 import net.fabricmc.api.ModInitializer;
 
-public class BetterVillageSpawnPoint implements ModInitializer {
+public class BetterVillageSpawnPointFabric implements ModInitializer {
     
     @Override
     public void onInitialize() {
