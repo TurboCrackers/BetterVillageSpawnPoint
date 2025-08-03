@@ -1,67 +1,38 @@
 package com.turbocrackers.bettervillagespawnpoint;
 
-import com.electronwill.nightconfig.core.file.CommentedFileConfig;
+import me.shedaniel.autoconfig.ConfigData;
+import me.shedaniel.autoconfig.annotation.Config;
+import me.shedaniel.autoconfig.annotation.ConfigEntry;
 
-import java.nio.file.Path;
 import java.util.List;
 
-public class FabricConfig extends CommonConfig {
+@Config(name = "bettervillagespawnpoint")
+public class FabricConfig extends CommonConfig implements ConfigData
+{
+    @ConfigEntry.Gui.Tooltip
+    public List<String> villageTags = List.of("#minecraft:village");
+    // Tooltip: List of village IDs or tags to search for as spawn targets.
+    // Examples: #minecraft:village or minecraft:village_plains.
+    // Same input used for the /locate structure command.
 
-    private static final String CONFIG_FILE = "config/BetterVillageSpawnPoint-common.toml";
+    @ConfigEntry.Gui.Tooltip
+    public boolean useMinecraftVillagesAsFallback = true;
+    // Tooltip: If true, vanilla Minecraft villages will be used as fallback
+    // when no custom village tags match.
 
-    private List<? extends String> structureIds;
-    private boolean useMinecraftVillageFallback;
-    private int searchRadius;
+    @ConfigEntry.Gui.Tooltip
+    public int villageSearchRadius = 2000;
+    // Tooltip: The distance (in blocks) to search from (0, 0, 0) for a village spawn point.
 
-    public void registerConfig() {
-        Path configPath = Path.of(CONFIG_FILE);
-
-        // Load or create config file with comments enabled
-        CommentedFileConfig config = CommentedFileConfig.builder(configPath)
-                .autosave()
-                .preserveInsertionOrder()
-                .build();
-        config.load();
-
-        // Ensure keys exist with defaults and comments
-        if (!config.contains("villageTags")) {
-            config.set("villageTags", List.of("#minecraft:village"));
-            config.setComment("villageTags",
-                              "List of village IDs and/or tags to search for as spawn targets.\n" +
-                              "Examples: #minecraft:village or minecraft:village_plains.\n" +
-                              "This is the same input used for the /locate structure command.");
-        }
-        structureIds = config.get("villageTags");
-
-        if (!config.contains("useMinecraftVillagesAsFallback")) {
-            config.set("useMinecraftVillagesAsFallback", true);
-            config.setComment("useMinecraftVillagesAsFallback",
-                              "If true, vanilla Minecraft villages will be used as a fallback when no custom village tags match.");
-        }
-        useMinecraftVillageFallback = config.get("useMinecraftVillagesAsFallback");
-
-        if (!config.contains("villageSearchRadius")) {
-            config.set("villageSearchRadius", 2000);
-            config.setComment("villageSearchRadius",
-                              "The distance (in blocks) to search from (0, 0, 0) for a village spawn point.");
-        }
-        searchRadius = config.get("villageSearchRadius");
-
-        config.save();
-    }
-
-    @Override
     public int GetSearchRadius() {
-        return searchRadius;
+        return villageSearchRadius;
     }
 
-    @Override
     public Boolean UseVanillaFallback() {
-        return useMinecraftVillageFallback;
+        return useMinecraftVillagesAsFallback;
     }
 
-    @Override
-    public List<? extends String> GetStructureList() {
-        return structureIds;
+    public List<String> GetStructureList() {
+        return villageTags;
     }
 }

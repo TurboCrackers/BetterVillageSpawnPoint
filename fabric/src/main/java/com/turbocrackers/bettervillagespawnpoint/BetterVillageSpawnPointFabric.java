@@ -2,6 +2,7 @@ package com.turbocrackers.bettervillagespawnpoint;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
+import me.shedaniel.autoconfig.AutoConfig;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -10,6 +11,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import me.shedaniel.autoconfig.serializer.Toml4jConfigSerializer;
 
 import java.util.Objects;
 
@@ -22,8 +24,8 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
         CommonClass.init();
 
         // Load config (Fabric version should be handled via a Fabric config library or your own loader)
-        CommonClass.m_Config = new FabricConfig();
-        ((FabricConfig)CommonClass.m_Config).registerConfig();
+        AutoConfig.register(FabricConfig.class, Toml4jConfigSerializer::new);
+        CommonClass.m_Config = AutoConfig.getConfigHolder(FabricConfig.class).getConfig();
 
         // Server start event
         ServerLifecycleEvents.SERVER_STARTED.register(this::onServerStarted);
