@@ -17,7 +17,7 @@ public class LevelMixin
     {
         Level level = (Level)(Object)this;
         LevelData level_data = level.getLevelData();
-        BlockPos current_shared_spawn_pos = level_data.getSpawnPos();
+        BlockPos current_shared_spawn_pos = new BlockPos( level_data.getXSpawn(), level_data.getYSpawn(), level_data.getZSpawn() );
 
         // Are we still using the village spawn pos?
         if( current_shared_spawn_pos.equals(CommonClass.m_VillageLocator.GetVillageSpawnPos()) )

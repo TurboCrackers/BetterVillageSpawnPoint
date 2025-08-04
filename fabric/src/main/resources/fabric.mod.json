@@ -20,15 +20,14 @@
         ]
     },
     "mixins": [
-        "${mod_id}.mixins.json",
-        "${mod_id}.fabric.mixins.json"
+        "${mod_id}.mixins.json"
     ],
     "depends": {
         "fabricloader": ">=${fabric_loader_version}",
         "fabric-api": "*",
         "minecraft": "~${minecraft_version}",
         "java": ">=${java_version}",
-        "cloth-config2": ">=18.0.145"
+        "cloth-config2": ">=11.1.136"
     },
     "suggests": {
         "another-mod": "*"
