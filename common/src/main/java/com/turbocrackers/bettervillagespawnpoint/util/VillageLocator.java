@@ -16,6 +16,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
@@ -34,6 +35,7 @@ import net.minecraft.world.level.levelgen.structure.placement.ConcentricRingsStr
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
 import net.minecraft.world.level.levelgen.structure.placement.StructurePlacement;
 import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
@@ -731,10 +733,6 @@ public class VillageLocator
 
         // The overworld is where we save our spawn data
         SpawnInitData data = SpawnInitData.get(level);
-        if (!data.isInitialized())
-        {
-            data.setInitialized(true);
-        }
         data.m_State = m_VillageSpawnPointGenerationState;
         data.m_VillageSpawnPos = m_VillageSpawnPos;
         data.m_BlockWhitelist = m_BlockWhitelist;
@@ -753,10 +751,6 @@ public class VillageLocator
         m_VillageSpawnPointGenerationState = SpawnInitData.VillageSpawnPointState.FAILURE;
         m_VillageSpawnPointFailureReason = failure_reason;
         SpawnInitData data = SpawnInitData.get(level);
-        if (!data.isInitialized())
-        {
-            data.setInitialized(true);
-        }
         data.m_State = m_VillageSpawnPointGenerationState;
         data.m_VillageSpawnPos = m_VillageSpawnPos;
         data.m_BlockWhitelist = m_BlockWhitelist;
@@ -790,10 +784,6 @@ public class VillageLocator
 
         // Only set the spawn point once
         SpawnInitData data = SpawnInitData.get(level);
-        if (!data.isInitialized())
-        {
-            data.setInitialized(true);
-        }
 
         // Load save data
         m_VillageSpawnPointGenerationState = data.m_State;
