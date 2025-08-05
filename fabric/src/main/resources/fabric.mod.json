@@ -8,8 +8,8 @@
         "${mod_author}"
     ],
     "contact": {
-        "homepage": "https://fabricmc.net/",
-        "sources": "https://github.com/FabricMC/fabric-example-mod"
+        "homepage": "https://www.curseforge.com/minecraft/mc-mods/better-village-spawn-point",
+        "sources": "https://github.com/TurboCrackers/BetterVillageSpawnPoint"
     },
     "license": "${license}",
     "icon": "${mod_id}.png",
@@ -28,7 +28,7 @@
         "fabric-api": "*",
         "minecraft": "~${minecraft_version}",
         "java": ">=${java_version}",
-        "cloth-config2": ">=16.0.143"
+        "cloth-config2": ">=15.0.140"
     },
     "suggests": {
         "another-mod": "*"

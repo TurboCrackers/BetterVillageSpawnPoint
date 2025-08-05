@@ -250,16 +250,15 @@ public class VillageLocator
         ChunkAccess chunk = level.getChunk(chunk_pos.x, chunk_pos.z);
 
         // Search within that chunk for the village
-        Registry<Structure> structureRegistry = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
+        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
         ResourceLocation structureId = ResourceLocation.parse(nearest_village_tag_or_id);
-        var structure_result = structureRegistry.get(structureId);
-        if(structure_result.isEmpty())
+        Structure structure = structureRegistry.get(structureId);
+        if(structure == null)
         {
             Constants.LOG.error("[Better Village Spawn Point] How did we get to the point of pre-generating a chunk and the structure wasn't found?? Something is very wrong.");
             OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.UNKNOWN_LOADING_ERROR);
             return false;
         }
-        Structure structure = structure_result.get().value();
         StructureStart village_start = chunk.getStartForStructure(structure);
         if (village_start == null)
         {
@@ -796,7 +795,7 @@ public class VillageLocator
         }
 
         // Set up our list of structure tags and IDs
-        Registry<Structure> structureRegistry = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
+        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
         List<Holder<Structure>> village_holders = new ArrayList<>();
         HolderLookup.RegistryLookup<Structure> structureLookup = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
 

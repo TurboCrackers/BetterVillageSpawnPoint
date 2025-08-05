@@ -68,10 +68,8 @@ public class SpawnInitData extends SavedData
                 if( blockId == null )
                     continue;
 
-                Optional<Holder.Reference<Block>> block = BuiltInRegistries.BLOCK.get(blockId);
-
-                // Ensure it's valid
-                block.ifPresent(blockReference -> data.m_BlockWhitelist.add(blockReference.value()));
+                Block block = BuiltInRegistries.BLOCK.get(blockId);
+                data.m_BlockWhitelist.add(block);
             }
         }
         return data;
