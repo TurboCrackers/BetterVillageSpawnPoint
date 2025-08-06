@@ -251,7 +251,7 @@ public class VillageLocator
 
         // Search within that chunk for the village
         Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
-        ResourceLocation structureId = ResourceLocation.parse(nearest_village_tag_or_id);
+        ResourceLocation structureId = ResourceLocation.tryParse(nearest_village_tag_or_id);
         Structure structure = structureRegistry.get(structureId);
         if(structure == null)
         {
@@ -811,7 +811,7 @@ public class VillageLocator
 
             if (config_entry.startsWith("#"))
             {
-                TagKey<Structure> tagKey = TagKey.create(Registries.STRUCTURE, ResourceLocation.parse(config_entry.substring(1)));
+                TagKey<Structure> tagKey = TagKey.create(Registries.STRUCTURE, ResourceLocation.tryParse(config_entry.substring(1)));
                 structureLookup.get(tagKey).ifPresentOrElse(
                         holders -> holders.forEach(village_holders::add),
                         () -> Constants.LOG.warn("[Better Village Spawn Point] Structure tag '{}' not found in registry! Skipping.", config_entry)
