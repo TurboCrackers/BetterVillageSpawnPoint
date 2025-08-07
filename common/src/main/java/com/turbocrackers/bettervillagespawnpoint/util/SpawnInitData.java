@@ -47,8 +47,12 @@ public class SpawnInitData extends SavedData
     public BlockPos m_VillagePos = BlockPos.ZERO;
     public String m_VillageID = "";
 
+    public SpawnInitData()
+    {
+        // Default constructor
+    }
 
-    public static SpawnInitData load(CompoundTag tag, HolderLookup.@NotNull Provider provider)
+    public static SpawnInitData load(CompoundTag tag)
     {
         SpawnInitData data = new SpawnInitData();
         data.m_State = VillageSpawnPointState.valueOf(String.valueOf(tag.getString("VillageSpawnPointState")));
@@ -76,7 +80,7 @@ public class SpawnInitData extends SavedData
     }
 
     @Override
-    public @NotNull CompoundTag save(CompoundTag tag, HolderLookup.@NotNull Provider provider)
+    public @NotNull CompoundTag save(CompoundTag tag)
     {
         tag.putString("VillageSpawnPointState", m_State.name());
         tag.putInt( "VillageSpawnPosX", m_VillageSpawnPos.getX() );
@@ -101,12 +105,6 @@ public class SpawnInitData extends SavedData
     public static SpawnInitData get( ServerLevel level)
     {
         return level.getDataStorage().computeIfAbsent(
-                new SavedData.Factory<>(
-                        SpawnInitData::new,     // supplier: creates new data if none exists
-                        SpawnInitData::load,    // loader: reads from NBT
-                        DataFixTypes.LEVEL      // type: pick a relevant DataFixTypes, LEVEL is common
-                ),
-                "bettervillagespawnpoint_spawn_data" // the actual save file name
-                                                                   );
+                new SavedData.Factory<>(SpawnInitData::new, SpawnInitData::load, DataFixTypes.LEVEL), "bettervillagespawnpoint_spawn_data");
     }
 }

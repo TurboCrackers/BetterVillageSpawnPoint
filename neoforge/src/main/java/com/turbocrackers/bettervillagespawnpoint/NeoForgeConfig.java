@@ -1,6 +1,7 @@
 package com.turbocrackers.bettervillagespawnpoint;
 
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModLoadingContext;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.common.ModConfigSpec;
 import java.util.List;
@@ -36,7 +37,7 @@ public class NeoForgeConfig extends CommonConfig
         CONFIG = BUILDER.build();
     }
 
-    public void RegisterConfig(ModContainer container) { container.registerConfig(ModConfig.Type.COMMON, CONFIG, "BetterVillageSpawnPoint-common.toml"); }
+    public void RegisterConfig(ModContainer container) { ModLoadingContext.get().registerConfig(ModConfig.Type.COMMON, CONFIG ); }
 
     @Override
     public int GetSearchRadius() { return SEARCH_RADIUS.get(); }

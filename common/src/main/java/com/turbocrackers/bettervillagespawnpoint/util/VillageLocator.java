@@ -25,7 +25,7 @@ import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
-import net.minecraft.world.level.chunk.status.ChunkStatus;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.*;
 import net.minecraft.world.level.levelgen.structure.placement.ConcentricRingsStructurePlacement;
@@ -198,7 +198,7 @@ public class VillageLocator
     {
         for (Holder<Structure> holder : structures)
         {
-            StructureCheckResult result = structureManager.checkStructurePresence(chunkPos, holder.value(), placement, skipKnownStructures);
+            StructureCheckResult result = structureManager.checkStructurePresence(chunkPos, holder.value(), skipKnownStructures);
 
             if (result != StructureCheckResult.START_NOT_PRESENT)
             {

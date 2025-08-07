@@ -13,11 +13,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public class LevelMixin
 {
     @Inject(method = "getSharedSpawnPos", at = @At("HEAD"), cancellable = true)
-    public void overrideGetSharedSpawnPos(CallbackInfoReturnable<BlockPos> cir)
+    private void overrideGetSharedSpawnPos(CallbackInfoReturnable<BlockPos> cir)
     {
         Level level = (Level)(Object)this;
         LevelData level_data = level.getLevelData();
-        BlockPos current_shared_spawn_pos = level_data.getSpawnPos();
+        BlockPos current_shared_spawn_pos = new BlockPos( level_data.getXSpawn(), level_data.getYSpawn(), level_data.getZSpawn() );
 
         // Are we still using the village spawn pos?
         if( current_shared_spawn_pos.equals(CommonClass.m_VillageLocator.GetVillageSpawnPos()) )

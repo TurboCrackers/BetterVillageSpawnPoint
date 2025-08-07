@@ -2,10 +2,10 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.turbocrackers.bettervillagespawnpoint.mixin",
-  "compatibilityLevel": "JAVA_18",
+  "refmap": "${mod_id}.refmap.json",
+  "compatibilityLevel": "${java_version_name}",
   "mixins": [],
   "client": [],
-  "server": [],
   "injectors": {
     "defaultRequire": 1
   }
