@@ -11,6 +11,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.world.level.SpawnData;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.NotNull;
@@ -102,9 +103,8 @@ public class SpawnInitData extends SavedData
         return tag;
     }
 
-    public static SpawnInitData get( ServerLevel level)
+    public static SpawnInitData get(ServerLevel level)
     {
-        return level.getDataStorage().computeIfAbsent(
-                new SavedData.Factory<>(SpawnInitData::new, SpawnInitData::load, DataFixTypes.LEVEL), "bettervillagespawnpoint_spawn_data");
+        return level.getDataStorage().computeIfAbsent(SpawnInitData::load, SpawnInitData::new, "bettervillagespawnpoint_spawn_data");
     }
 }

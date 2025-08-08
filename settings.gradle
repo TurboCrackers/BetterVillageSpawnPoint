@@ -18,18 +18,6 @@ pluginManagement {
         exclusiveContent {
             forRepository {
                 maven {
-                    name = 'NeoForge'
-                    url = uri("https://maven.neoforged.net/releases")
-                }
-            }
-            filter {
-                includeGroupAndSubgroups("net.neoforged")
-                includeGroup("codechicken")
-            }
-        }
-        exclusiveContent {
-            forRepository {
-                maven {
                     name = 'Forge'
                     url = uri("https://maven.minecraftforge.net")
                 }
@@ -61,4 +49,3 @@ rootProject.name = 'MultiLoader-Template'
 include("common")
 include("fabric")
 include("forge")
-include("neoforge")
