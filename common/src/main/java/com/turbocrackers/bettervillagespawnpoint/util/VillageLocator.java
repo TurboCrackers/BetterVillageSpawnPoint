@@ -6,14 +6,12 @@ import com.turbocrackers.bettervillagespawnpoint.Constants;
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import net.minecraft.core.*;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
-import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelReader;
@@ -24,21 +22,27 @@ import net.minecraft.world.level.block.BushBlock;
 import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
+import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
+import net.minecraft.world.level.levelgen.RandomState;
 import net.minecraft.world.level.levelgen.structure.*;
 import net.minecraft.world.level.levelgen.structure.placement.ConcentricRingsStructurePlacement;
 import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
 import net.minecraft.world.level.levelgen.structure.placement.StructurePlacement;
+import net.minecraft.world.level.levelgen.synth.NormalNoise;
 import net.minecraft.world.level.material.FluidState;
-import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 
+import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class VillageLocator
 {
@@ -53,20 +57,41 @@ public class VillageLocator
     @Nullable
     public static ArrayList<Pair<BlockPos, Holder<Structure>>> findNearestMapStructures(ServerLevel level, HolderSet<Structure> pStructure, BlockPos origin, int searchRadius, boolean skipKnownStructures)
     {
-        ChunkGeneratorStructureState generatorState = level.getChunkSource().getGeneratorState();
         StructureManager structureManager = level.structureManager();
 
-        // Build map of structure placements
-        Map<StructurePlacement, Set<Holder<Structure>>> placementMap = new Object2ObjectArrayMap<>();
-        for (Holder<Structure> holder : pStructure)
+        var generator = level.getChunkSource().getGenerator();
+
+        RandomState rs = null;
+        if (generator instanceof NoiseBasedChunkGenerator noiseGen)
         {
-            for (StructurePlacement placement : generatorState.getPlacementsForStructure(holder))
-            {
-                placementMap.computeIfAbsent(placement, k -> new ObjectArraySet<>()).add(holder);
-            }
+            NoiseGeneratorSettings settings = noiseGen.generatorSettings().value();
+            Registry<NormalNoise.NoiseParameters> noiseParams =
+                    level.registryAccess().registryOrThrow(Registry.NOISE_REGISTRY);
+            rs = RandomState.create(settings, noiseParams, level.getSeed());
         }
 
-        if (placementMap.isEmpty())
+        Set<Holder<Structure>> targets = new HashSet<>();
+        for (Holder<Structure> h : pStructure) targets.add(h);
+
+        Map<StructurePlacement, Set<Holder<Structure>>> placementMap = new Object2ObjectArrayMap<>();
+        Registry<StructureSet> structureSetRegistry =
+                level.registryAccess().registryOrThrow(Registry.STRUCTURE_SET_REGISTRY);
+        structureSetRegistry.holders().forEach(setRef -> {
+            StructureSet set = setRef.value();
+            StructurePlacement placement = set.placement();
+
+            // Name may be 'structures()' or 'entries()' depending on your mappings:
+            var entries = set.structures(); // if this errors, rename to set.entries()
+
+            for (StructureSet.StructureSelectionEntry entry : entries) {
+                Holder<Structure> structHolder = entry.structure();
+                if (targets.contains(structHolder)) {
+                    placementMap.computeIfAbsent(placement, k -> new ObjectArraySet<>()).add(structHolder);
+                }
+            }
+        });
+
+        if (targets.isEmpty())
         {
             return null;
         }
@@ -91,7 +116,7 @@ public class VillageLocator
             {
                 // Locate random spread structures (like Villages)
                 nearest = findNearestRandomSpread(holderSet, level, structureManager, originSectionX, originSectionZ,
-                                                  searchRadius, skipKnownStructures, generatorState.getLevelSeed(), randomSpread);
+                                                  searchRadius, skipKnownStructures, level.getSeed(), randomSpread);
             }
 
             if (nearest != null)
@@ -115,32 +140,49 @@ public class VillageLocator
             ConcentricRingsStructurePlacement placement
                                                                           )
     {
-        List<ChunkPos> ringPositions = level.getChunkSource().getGeneratorState().getRingPositionsFor(placement);
-        if (ringPositions == null)
+        ChunkGenerator generator = level.getChunkSource().getGenerator();
+        if (generator instanceof NoiseBasedChunkGenerator noiseGen) {
+            Holder<NoiseGeneratorSettings> settings = noiseGen.generatorSettings(); // <-- 1.19.2 name
+            Optional<ResourceKey<NoiseGeneratorSettings>> settingsKey = settings.unwrapKey();
+
+            if( settingsKey.isEmpty() )
+            {
+                return null;
+            }
+// ✅ create via (RegistryAccess, ResourceKey, seed)
+            RandomState rs = RandomState.create(level.registryAccess(), settingsKey.get(), level.getSeed());
+            List<ChunkPos> ringPositions = noiseGen.getRingPositionsFor(placement, rs);
+
+            if (ringPositions == null)
+            {
+                return null;
+            }
+
+            double closestDist = Double.MAX_VALUE;
+            Pair<BlockPos, Holder<Structure>> closest = null;
+            BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
+
+            for (ChunkPos chunkPos : ringPositions)
+            {
+                mutablePos.set(SectionPos.sectionToBlockCoord(chunkPos.x, 8), 32, SectionPos.sectionToBlockCoord(chunkPos.z, 8));
+                double dist = mutablePos.distSqr(origin);
+
+                if (dist < closestDist)
+                {
+                    Pair<BlockPos, Holder<Structure>> candidate = getStructureAt(structures, level, structureManager, skipKnownStructures, placement, chunkPos);
+                    if (candidate != null)
+                    {
+                        closest = candidate;
+                        closestDist = dist;
+                    }
+                }
+            }
+            return closest;
+        }
+        else
         {
             return null;
         }
-
-        double closestDist = Double.MAX_VALUE;
-        Pair<BlockPos, Holder<Structure>> closest = null;
-        BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
-
-        for (ChunkPos chunkPos : ringPositions)
-        {
-            mutablePos.set(SectionPos.sectionToBlockCoord(chunkPos.x, 8), 32, SectionPos.sectionToBlockCoord(chunkPos.z, 8));
-            double dist = mutablePos.distSqr(origin);
-
-            if (dist < closestDist)
-            {
-                Pair<BlockPos, Holder<Structure>> candidate = getStructureAt(structures, level, structureManager, skipKnownStructures, placement, chunkPos);
-                if (candidate != null)
-                {
-                    closest = candidate;
-                    closestDist = dist;
-                }
-            }
-        }
-        return closest;
     }
 
     @Nullable
@@ -250,7 +292,7 @@ public class VillageLocator
         ChunkAccess chunk = level.getChunk(chunk_pos.x, chunk_pos.z);
 
         // Search within that chunk for the village
-        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
         ResourceLocation structureId = ResourceLocation.tryParse(nearest_village_tag_or_id);
         Structure structure = structureRegistry.get(structureId);
         if(structure == null)
@@ -456,7 +498,6 @@ public class VillageLocator
 
     private static final ArrayList<Block> BODY_BLOCK_BLACKLIST = new ArrayList<>(Arrays.asList(Blocks.SWEET_BERRY_BUSH,
                                                                                                Blocks.SUGAR_CANE,
-                                                                                               Blocks.BAMBOO_BLOCK,
                                                                                                Blocks.TALL_GRASS));
 
     private static final ArrayList<TagKey<Block>> BODY_BLOCK_TAG_BLACKLIST = new ArrayList<>(Arrays.asList(BlockTags.FENCES,
@@ -795,9 +836,8 @@ public class VillageLocator
         }
 
         // Set up our list of structure tags and IDs
-        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
         List<Holder<Structure>> village_holders = new ArrayList<>();
-        HolderLookup.RegistryLookup<Structure> structureLookup = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
 
         // Populate the array of holders
         List<String> structure_ids = new ArrayList<>(CommonClass.m_Config.GetStructureList());
@@ -811,12 +851,23 @@ public class VillageLocator
 
             if (config_entry.startsWith("#"))
             {
-                TagKey<Structure> tagKey = TagKey.create(Registries.STRUCTURE, ResourceLocation.tryParse(config_entry.substring(1)));
-                structureLookup.get(tagKey).ifPresentOrElse(
-                        holders -> holders.forEach(village_holders::add),
-                        () -> Constants.LOG.warn("[Better Village Spawn Point] Structure tag '{}' not found in registry! Skipping.", config_entry)
-                                                           );
-                continue;
+                ResourceLocation tagId = ResourceLocation.tryParse(config_entry.substring(1));
+                if (tagId == null) {
+                    Constants.LOG.warn("[Better Village Spawn Point] Bad structure tag id '{}'", config_entry);
+                    continue;
+                }
+                else
+                {
+                    TagKey<Structure> tagKey = TagKey.create(Registry.STRUCTURE_REGISTRY, tagId);
+                    structureRegistry.getTag(tagKey).ifPresentOrElse(holderSet -> {
+                        // HolderSet is Iterable in 1.19.2
+                        for (Holder<Structure> h : holderSet) {
+                            village_holders.add(h);
+                        }
+                    }, () -> {
+                        Constants.LOG.warn("[Better Village Spawn Point] Structure tag '{}' not found in registry! Skipping.", config_entry);
+                    });
+                }
             }
             else
             {
@@ -827,14 +878,15 @@ public class VillageLocator
                     continue;
                 }
 
-                ResourceKey<Structure> key = ResourceKey.create(Registries.STRUCTURE, resource_location);
-                Optional<Holder.Reference<Structure>> structure_holder = structureLookup.get(key);
-                if (structure_holder.isEmpty()) {
+                ResourceKey<Structure> key = ResourceKey.create(Registry.STRUCTURE_REGISTRY, resource_location);
+
+                Registry<Structure> reg = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
+                Optional<Holder<Structure>> holder = reg.getHolder(key);
+                if (holder.isEmpty()) {
                     Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' not found in registry! Skipping.", config_entry);
                     continue;
                 }
-
-                village_holders.add(structure_holder.get());
+                village_holders.add(holder.get());
             }
         }
 
@@ -874,13 +926,22 @@ public class VillageLocator
             return;
         }
 
-        HolderSet<Structure> vanillaVillages = HolderSet.direct(List.of(
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_PLAINS.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_DESERT.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_SAVANNA.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_TAIGA.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_SNOWY.location()))
-                                                                       ));
+        HolderSet<Structure> vanillaVillages = CompatHolders.direct(
+                Stream.of(
+                                BuiltinStructures.VILLAGE_PLAINS,
+                                BuiltinStructures.VILLAGE_DESERT,
+                                BuiltinStructures.VILLAGE_SAVANNA,
+                                BuiltinStructures.VILLAGE_TAIGA,
+                                BuiltinStructures.VILLAGE_SNOWY
+                         )
+                        .map(key -> {
+                            ResourceKey<Structure> rk = ResourceKey.create(Registry.STRUCTURE_REGISTRY, key.location());
+                            return structureRegistry.getHolder(rk)
+                                    .orElseThrow(() -> new IllegalStateException("Missing structure: " + rk.location()));
+                        })
+                        .collect(Collectors.toList())
+                                                                   );
+
 
         ArrayList<Pair<BlockPos, Holder<Structure>>> vanilla_results = VillageLocator.findNearestMapStructures(level, vanillaVillages, BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
         if (vanilla_results != null)

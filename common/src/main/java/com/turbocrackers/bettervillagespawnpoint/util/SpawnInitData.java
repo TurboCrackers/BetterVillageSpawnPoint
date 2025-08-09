@@ -1,17 +1,13 @@
 package com.turbocrackers.bettervillagespawnpoint.util;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderLookup;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.util.datafix.DataFixTypes;
-import net.minecraft.world.level.SpawnData;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.NotNull;
@@ -73,7 +69,7 @@ public class SpawnInitData extends SavedData
                 if( blockId == null )
                     continue;
 
-                Block block = BuiltInRegistries.BLOCK.get(blockId);
+                Block block = Registry.BLOCK.get(blockId);
                 data.m_BlockWhitelist.add(block);
             }
         }
@@ -96,7 +92,7 @@ public class SpawnInitData extends SavedData
         ListTag listTag = new ListTag();
         for (Block block : m_BlockWhitelist)
         {
-            ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
+            ResourceLocation blockId = Registry.BLOCK.getKey(block);
             listTag.add(StringTag.valueOf(blockId.toString()));
         }
         tag.put("BlockWhitelist", listTag);
