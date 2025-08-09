@@ -3,8 +3,6 @@ package com.turbocrackers.bettervillagespawnpoint.util;
 import com.mojang.datafixers.util.Pair;
 import com.turbocrackers.bettervillagespawnpoint.CommonClass;
 import com.turbocrackers.bettervillagespawnpoint.Constants;
-import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
-import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import net.minecraft.core.*;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -14,8 +12,6 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.LevelReader;
-import net.minecraft.world.level.StructureManager;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.BushBlock;
@@ -25,20 +21,12 @@ import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.levelgen.NoiseBasedChunkGenerator;
-import net.minecraft.world.level.levelgen.NoiseGeneratorSettings;
-import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.feature.ConfiguredStructureFeature;
 import net.minecraft.world.level.levelgen.structure.*;
-import net.minecraft.world.level.levelgen.structure.placement.ConcentricRingsStructurePlacement;
-import net.minecraft.world.level.levelgen.structure.placement.RandomSpreadStructurePlacement;
-import net.minecraft.world.level.levelgen.structure.placement.StructurePlacement;
-import net.minecraft.world.level.levelgen.synth.NormalNoise;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureManager;
 import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
-
-
-import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -55,222 +43,27 @@ public class VillageLocator
     private final BlockDebugger m_BlockDebugger = new BlockDebugger();
 
     @Nullable
-    public static ArrayList<Pair<BlockPos, Holder<Structure>>> findNearestMapStructures(ServerLevel level, HolderSet<Structure> pStructure, BlockPos origin, int searchRadius, boolean skipKnownStructures)
+    public static ArrayList<Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>>> findNearestMapStructures(ServerLevel level, HolderSet<ConfiguredStructureFeature<?, ?>> pStructure, BlockPos origin, int searchRadius, boolean skipKnownStructures)
     {
-        StructureManager structureManager = level.structureManager();
+        StructureManager structureManager = level.getStructureManager();
 
-        var generator = level.getChunkSource().getGenerator();
+        ChunkGenerator generator = level.getChunkSource().getGenerator();
+        ArrayList<Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>>> results = new ArrayList<>();
 
-        RandomState rs = null;
-        if (generator instanceof NoiseBasedChunkGenerator noiseGen)
-        {
-            NoiseGeneratorSettings settings = noiseGen.generatorSettings().value();
-            Registry<NormalNoise.NoiseParameters> noiseParams =
-                    level.registryAccess().registryOrThrow(Registry.NOISE_REGISTRY);
-            rs = RandomState.create(settings, noiseParams, level.getSeed());
-        }
+        for (Holder<ConfiguredStructureFeature<?, ?>> h : pStructure) {
+            HolderSet<ConfiguredStructureFeature<?, ?>> single = HolderSet.direct(List.of(h));
+            Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>> result = generator.findNearestMapFeature(level, single, origin, searchRadius, skipKnownStructures);
 
-        Set<Holder<Structure>> targets = new HashSet<>();
-        for (Holder<Structure> h : pStructure) targets.add(h);
+            if( result == null )
+                continue;
 
-        Map<StructurePlacement, Set<Holder<Structure>>> placementMap = new Object2ObjectArrayMap<>();
-        Registry<StructureSet> structureSetRegistry =
-                level.registryAccess().registryOrThrow(Registry.STRUCTURE_SET_REGISTRY);
-        structureSetRegistry.holders().forEach(setRef -> {
-            StructureSet set = setRef.value();
-            StructurePlacement placement = set.placement();
-
-            // Name may be 'structures()' or 'entries()' depending on your mappings:
-            var entries = set.structures(); // if this errors, rename to set.entries()
-
-            for (StructureSet.StructureSelectionEntry entry : entries) {
-                Holder<Structure> structHolder = entry.structure();
-                if (targets.contains(structHolder)) {
-                    placementMap.computeIfAbsent(placement, k -> new ObjectArraySet<>()).add(structHolder);
-                }
-            }
-        });
-
-        if (targets.isEmpty())
-        {
-            return null;
-        }
-
-        ArrayList<Pair<BlockPos, Holder<Structure>>> results = new ArrayList<>();
-        int originSectionX = SectionPos.blockToSectionCoord(origin.getX());
-        int originSectionZ = SectionPos.blockToSectionCoord(origin.getZ());
-
-        for (Map.Entry<StructurePlacement, Set<Holder<Structure>>> entry : placementMap.entrySet())
-        {
-            StructurePlacement placement = entry.getKey();
-            Set<Holder<Structure>> holderSet = entry.getValue();
-
-            Pair<BlockPos, Holder<Structure>> nearest = null;
-
-            if (placement instanceof ConcentricRingsStructurePlacement concentric)
-            {
-                // Locate concentric ring structures (like Strongholds)
-                nearest = findNearestConcentric(holderSet, level, structureManager, origin, skipKnownStructures, concentric);
-            }
-            else if (placement instanceof RandomSpreadStructurePlacement randomSpread)
-            {
-                // Locate random spread structures (like Villages)
-                nearest = findNearestRandomSpread(holderSet, level, structureManager, originSectionX, originSectionZ,
-                                                  searchRadius, skipKnownStructures, level.getSeed(), randomSpread);
-            }
-
-            if (nearest != null)
-            {
-                results.add(nearest);
-            }
+            results.add(result);
         }
 
         // Sort final results by distance from origin
         results.sort(Comparator.comparingDouble(pair -> pair.getFirst().distSqr(origin)));
         return results;
     }
-
-    @Nullable
-    private static Pair<BlockPos, Holder<Structure>> findNearestConcentric(
-            Set<Holder<Structure>> structures,
-            ServerLevel level,
-            StructureManager structureManager,
-            BlockPos origin,
-            boolean skipKnownStructures,
-            ConcentricRingsStructurePlacement placement
-                                                                          )
-    {
-        ChunkGenerator generator = level.getChunkSource().getGenerator();
-        if (generator instanceof NoiseBasedChunkGenerator noiseGen) {
-            Holder<NoiseGeneratorSettings> settings = noiseGen.generatorSettings(); // <-- 1.19.2 name
-            Optional<ResourceKey<NoiseGeneratorSettings>> settingsKey = settings.unwrapKey();
-
-            if( settingsKey.isEmpty() )
-            {
-                return null;
-            }
-// ✅ create via (RegistryAccess, ResourceKey, seed)
-            RandomState rs = RandomState.create(level.registryAccess(), settingsKey.get(), level.getSeed());
-            List<ChunkPos> ringPositions = noiseGen.getRingPositionsFor(placement, rs);
-
-            if (ringPositions == null)
-            {
-                return null;
-            }
-
-            double closestDist = Double.MAX_VALUE;
-            Pair<BlockPos, Holder<Structure>> closest = null;
-            BlockPos.MutableBlockPos mutablePos = new BlockPos.MutableBlockPos();
-
-            for (ChunkPos chunkPos : ringPositions)
-            {
-                mutablePos.set(SectionPos.sectionToBlockCoord(chunkPos.x, 8), 32, SectionPos.sectionToBlockCoord(chunkPos.z, 8));
-                double dist = mutablePos.distSqr(origin);
-
-                if (dist < closestDist)
-                {
-                    Pair<BlockPos, Holder<Structure>> candidate = getStructureAt(structures, level, structureManager, skipKnownStructures, placement, chunkPos);
-                    if (candidate != null)
-                    {
-                        closest = candidate;
-                        closestDist = dist;
-                    }
-                }
-            }
-            return closest;
-        }
-        else
-        {
-            return null;
-        }
-    }
-
-    @Nullable
-    private static Pair<BlockPos, Holder<Structure>> findNearestRandomSpread(
-            Set<Holder<Structure>> structures,
-            LevelReader level,
-            StructureManager structureManager,
-            int originX, int originZ,
-            int searchRadius,
-            boolean skipKnownStructures,
-            long seed,
-            RandomSpreadStructurePlacement placement
-                                                                            )
-    {
-        int spacing = placement.spacing();
-
-        for (int radius = 0; radius <= searchRadius; ++radius)
-        {
-            for (int dx = -radius; dx <= radius; ++dx)
-            {
-                boolean edgeX = dx == -radius || dx == radius;
-
-                for (int dz = -radius; dz <= radius; ++dz)
-                {
-                    boolean edgeZ = dz == -radius || dz == radius;
-
-                    if (edgeX || edgeZ)
-                    {
-                        int chunkX = originX + spacing * dx;
-                        int chunkZ = originZ + spacing * dz;
-
-                        ChunkPos chunkPos = placement.getPotentialStructureChunk(seed, chunkX, chunkZ);
-                        Pair<BlockPos, Holder<Structure>> candidate =
-                                getStructureAt(structures, level, structureManager, skipKnownStructures, placement, chunkPos);
-
-                        if (candidate != null)
-                        {
-                            return candidate; // ✅ Stop at first found structure
-                        }
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    @Nullable
-    private static Pair<BlockPos, Holder<Structure>> getStructureAt(
-            Set<Holder<Structure>> structures,
-            LevelReader level,
-            StructureManager structureManager,
-            boolean skipKnownStructures,
-            StructurePlacement placement,
-            ChunkPos chunkPos )
-    {
-        for (Holder<Structure> holder : structures)
-        {
-            StructureCheckResult result = structureManager.checkStructurePresence(chunkPos, holder.value(), skipKnownStructures);
-
-            if (result != StructureCheckResult.START_NOT_PRESENT)
-            {
-                if (!skipKnownStructures && result == StructureCheckResult.START_PRESENT)
-                {
-                    return Pair.of(placement.getLocatePos(chunkPos), holder);
-                }
-
-                ChunkAccess chunk = level.getChunk(chunkPos.x, chunkPos.z, ChunkStatus.STRUCTURE_STARTS);
-                StructureStart start = structureManager.getStartForStructure(SectionPos.bottomOf(chunk), holder.value(), chunk);
-
-                if (start != null && start.isValid() && (!skipKnownStructures || tryAddReference(structureManager, start)))
-                {
-                    return Pair.of(placement.getLocatePos(start.getChunkPos()), holder);
-                }
-            }
-        }
-        return null;
-    }
-
-    private static boolean tryAddReference(StructureManager structureManager, StructureStart start)
-    {
-        if (start.canBeReferenced())
-        {
-            structureManager.addReference(start);
-            return true;
-        }
-        return false;
-    }
-
 
     public BlockPos GetVillageSpawnPos()
     {
@@ -292,16 +85,26 @@ public class VillageLocator
         ChunkAccess chunk = level.getChunk(chunk_pos.x, chunk_pos.z);
 
         // Search within that chunk for the village
-        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
+        Optional<? extends Registry<ConfiguredStructureFeature<?, ?>>> structureRegistry = level.registryAccess().registry(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY);
+        if( structureRegistry.isEmpty() )
+            return false;
+
         ResourceLocation structureId = ResourceLocation.tryParse(nearest_village_tag_or_id);
-        Structure structure = structureRegistry.get(structureId);
-        if(structure == null)
+        ResourceKey<ConfiguredStructureFeature<?, ?>> key =
+                ResourceKey.create(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY, structureId);
+        Optional<? extends Registry<ConfiguredStructureFeature<?, ?>>> csfRegistry =
+                level.registryAccess().registry(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY);
+        if( csfRegistry.isEmpty() )
+            return false;
+
+        Optional<Holder<ConfiguredStructureFeature<?, ?>>> structure_holder = csfRegistry.get().getHolder(key);
+        if(structure_holder.isEmpty())
         {
             Constants.LOG.error("[Better Village Spawn Point] How did we get to the point of pre-generating a chunk and the structure wasn't found?? Something is very wrong.");
             OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.UNKNOWN_LOADING_ERROR);
             return false;
         }
-        StructureStart village_start = chunk.getStartForStructure(structure);
+        StructureStart village_start = chunk.getStartForFeature(structure_holder.get().value());
         if (village_start == null)
         {
             Constants.LOG.error("[Better Village Spawn Point] How did we get to the point of pre-generating a chunk and the structure was found but the StructureStart wasn't?? Something is very wrong.");
@@ -614,7 +417,7 @@ public class VillageLocator
         }
 
         // Check if movement is blocked. Carpet has collision but is an exception
-        if (!bottom.getCollisionShape(level, pos.above(1)).isEmpty() && !bottom.is(BlockTags.WOOL_CARPETS))
+        if (!bottom.getCollisionShape(level, pos.above(1)).isEmpty() && !bottom.is(BlockTags.CARPETS))
         {
             m_BlockDebugger.AddBlockResult(pos, BlockDebugger.BlockResults.MOVE_BLOCKED);
             return false;
@@ -674,14 +477,14 @@ public class VillageLocator
         BlockPos top_east_pos = pos.above(2).east();
         BlockPos bottom_west_pos = pos.above(1).west();
         BlockPos top_west_pos = pos.above(2).west();
-        if ((!level.getBlockState(bottom_north_pos).getCollisionShape(level, bottom_north_pos).isEmpty() && !level.getBlockState(bottom_north_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(top_north_pos).getCollisionShape(level, top_north_pos).isEmpty() && !level.getBlockState(top_north_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(bottom_south_pos).getCollisionShape(level, bottom_south_pos).isEmpty() && !level.getBlockState(bottom_south_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(top_south_pos).getCollisionShape(level, top_south_pos).isEmpty() && !level.getBlockState(top_south_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(bottom_east_pos).getCollisionShape(level, bottom_east_pos).isEmpty() && !level.getBlockState(bottom_east_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(top_east_pos).getCollisionShape(level, top_east_pos).isEmpty() && !level.getBlockState(top_east_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(bottom_west_pos).getCollisionShape(level, bottom_west_pos).isEmpty() && !level.getBlockState(bottom_west_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(top_west_pos).getCollisionShape(level, top_west_pos).isEmpty() && !level.getBlockState(top_west_pos).is(BlockTags.WOOL_CARPETS)))
+        if ((!level.getBlockState(bottom_north_pos).getCollisionShape(level, bottom_north_pos).isEmpty() && !level.getBlockState(bottom_north_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(top_north_pos).getCollisionShape(level, top_north_pos).isEmpty() && !level.getBlockState(top_north_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(bottom_south_pos).getCollisionShape(level, bottom_south_pos).isEmpty() && !level.getBlockState(bottom_south_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(top_south_pos).getCollisionShape(level, top_south_pos).isEmpty() && !level.getBlockState(top_south_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(bottom_east_pos).getCollisionShape(level, bottom_east_pos).isEmpty() && !level.getBlockState(bottom_east_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(top_east_pos).getCollisionShape(level, top_east_pos).isEmpty() && !level.getBlockState(top_east_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(bottom_west_pos).getCollisionShape(level, bottom_west_pos).isEmpty() && !level.getBlockState(bottom_west_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(top_west_pos).getCollisionShape(level, top_west_pos).isEmpty() && !level.getBlockState(top_west_pos).is(BlockTags.CARPETS)))
         {
             m_BlockDebugger.AddBlockResult(pos, BlockDebugger.BlockResults.COLLISION_NSEW);
             return false;
@@ -696,14 +499,14 @@ public class VillageLocator
         BlockPos NW_top_pos = pos.above(2).north().west();
         BlockPos SW_bottom_pos = pos.above(1).south().west();
         BlockPos SW_top_pos = pos.above(2).south().west();
-        if ((!level.getBlockState(NE_bottom_pos).getCollisionShape(level, NE_bottom_pos).isEmpty() && !level.getBlockState(NE_bottom_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(NE_top_pos).getCollisionShape(level, NE_top_pos).isEmpty() && !level.getBlockState(NE_top_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(SE_bottom_pos).getCollisionShape(level, SE_bottom_pos).isEmpty() && !level.getBlockState(SE_bottom_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(SE_top_pos).getCollisionShape(level, SE_top_pos).isEmpty() && !level.getBlockState(SE_top_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(NW_bottom_pos).getCollisionShape(level, NW_bottom_pos).isEmpty() && !level.getBlockState(NW_bottom_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(NW_top_pos).getCollisionShape(level, NW_top_pos).isEmpty() && !level.getBlockState(NW_top_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(SW_bottom_pos).getCollisionShape(level, SW_bottom_pos).isEmpty() && !level.getBlockState(SW_bottom_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(SW_top_pos).getCollisionShape(level, SW_top_pos).isEmpty() && !level.getBlockState(SW_top_pos).is(BlockTags.WOOL_CARPETS)))
+        if ((!level.getBlockState(NE_bottom_pos).getCollisionShape(level, NE_bottom_pos).isEmpty() && !level.getBlockState(NE_bottom_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(NE_top_pos).getCollisionShape(level, NE_top_pos).isEmpty() && !level.getBlockState(NE_top_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(SE_bottom_pos).getCollisionShape(level, SE_bottom_pos).isEmpty() && !level.getBlockState(SE_bottom_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(SE_top_pos).getCollisionShape(level, SE_top_pos).isEmpty() && !level.getBlockState(SE_top_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(NW_bottom_pos).getCollisionShape(level, NW_bottom_pos).isEmpty() && !level.getBlockState(NW_bottom_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(NW_top_pos).getCollisionShape(level, NW_top_pos).isEmpty() && !level.getBlockState(NW_top_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(SW_bottom_pos).getCollisionShape(level, SW_bottom_pos).isEmpty() && !level.getBlockState(SW_bottom_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(SW_top_pos).getCollisionShape(level, SW_top_pos).isEmpty() && !level.getBlockState(SW_top_pos).is(BlockTags.CARPETS)))
         {
             m_BlockDebugger.AddBlockResult(pos, BlockDebugger.BlockResults.COLLISION_DIAG);
             return false;
@@ -836,8 +639,15 @@ public class VillageLocator
         }
 
         // Set up our list of structure tags and IDs
-        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
-        List<Holder<Structure>> village_holders = new ArrayList<>();
+        Optional<? extends Registry<ConfiguredStructureFeature<?, ?>>> structureRegistry = level.registryAccess().registry(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY);
+        if( structureRegistry.isEmpty() )
+            return;
+
+        List<Holder<ConfiguredStructureFeature<?, ?>>> village_holders = new ArrayList<>();
+        Optional<? extends Registry<ConfiguredStructureFeature<?, ?>>> csfRegistry =
+                level.registryAccess().registry(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY);
+        if( csfRegistry.isEmpty() )
+            return;
 
         // Populate the array of holders
         List<String> structure_ids = new ArrayList<>(CommonClass.m_Config.GetStructureList());
@@ -858,10 +668,9 @@ public class VillageLocator
                 }
                 else
                 {
-                    TagKey<Structure> tagKey = TagKey.create(Registry.STRUCTURE_REGISTRY, tagId);
-                    structureRegistry.getTag(tagKey).ifPresentOrElse(holderSet -> {
-                        // HolderSet is Iterable in 1.19.2
-                        for (Holder<Structure> h : holderSet) {
+                    TagKey<ConfiguredStructureFeature<?, ?>> tagKey = TagKey.create(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY, tagId);
+                    structureRegistry.get().getTag(tagKey).ifPresentOrElse(holderSet -> {
+                        for (Holder<ConfiguredStructureFeature<?, ?>> h : holderSet) {
                             village_holders.add(h);
                         }
                     }, () -> {
@@ -878,27 +687,29 @@ public class VillageLocator
                     continue;
                 }
 
-                ResourceKey<Structure> key = ResourceKey.create(Registry.STRUCTURE_REGISTRY, resource_location);
+                ResourceKey<ConfiguredStructureFeature<?, ?>> key =
+                        ResourceKey.create(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY, resource_location);
 
-                Registry<Structure> reg = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
-                Optional<Holder<Structure>> holder = reg.getHolder(key);
+                Optional<Holder<ConfiguredStructureFeature<?, ?>>> holder = csfRegistry.get().getHolder(key);
                 if (holder.isEmpty()) {
                     Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' not found in registry! Skipping.", config_entry);
                     continue;
                 }
+
                 village_holders.add(holder.get());
             }
         }
 
-        ArrayList<Pair<BlockPos, Holder<Structure>>> results = VillageLocator.findNearestMapStructures(level, HolderSet.direct(village_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
+
+        ArrayList<Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>>> results = VillageLocator.findNearestMapStructures(level, HolderSet.direct(village_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
         if (results != null)
         {
-            for (Pair<BlockPos, Holder<Structure>> result : results)
+            for (Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>> result : results)
             {
                 BlockPos pos = result.getFirst();
-                Holder<Structure> structure = result.getSecond();
+                Holder<ConfiguredStructureFeature<?, ?>> structure = result.getSecond();
 
-                Optional<ResourceKey<Structure>> key = structure.unwrapKey();
+                Optional<ResourceKey<ConfiguredStructureFeature<?, ?>>> key = structure.unwrapKey();
                 if (key.isEmpty())
                 {
                     OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.STRUCTURE_FOUND_BUT_KEY_NOT_VALID);
@@ -926,7 +737,7 @@ public class VillageLocator
             return;
         }
 
-        HolderSet<Structure> vanillaVillages = CompatHolders.direct(
+        HolderSet<ConfiguredStructureFeature<?, ?>> vanillaVillages = CompatHolders.direct(
                 Stream.of(
                                 BuiltinStructures.VILLAGE_PLAINS,
                                 BuiltinStructures.VILLAGE_DESERT,
@@ -935,20 +746,21 @@ public class VillageLocator
                                 BuiltinStructures.VILLAGE_SNOWY
                          )
                         .map(key -> {
-                            ResourceKey<Structure> rk = ResourceKey.create(Registry.STRUCTURE_REGISTRY, key.location());
-                            return structureRegistry.getHolder(rk)
-                                    .orElseThrow(() -> new IllegalStateException("Missing structure: " + rk.location()));
+                            ResourceKey<ConfiguredStructureFeature<?, ?>> rk = ResourceKey.create(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY, key.location());
+                            if( structureRegistry.get().getHolder(rk).isPresent() )
+                                return structureRegistry.get().getHolder(rk).get();
+                            return null;
                         })
                         .collect(Collectors.toList())
                                                                    );
 
 
-        ArrayList<Pair<BlockPos, Holder<Structure>>> vanilla_results = VillageLocator.findNearestMapStructures(level, vanillaVillages, BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
+        ArrayList<Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>>> vanilla_results = VillageLocator.findNearestMapStructures(level, vanillaVillages, BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
         if (vanilla_results != null)
         {
-            for (Pair<BlockPos, Holder<Structure>> vanilla_result : vanilla_results)
+            for (Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>> vanilla_result : vanilla_results)
             {
-                Optional<ResourceKey<Structure>> maybeKey = vanilla_result.getSecond().unwrapKey();
+                Optional<ResourceKey<ConfiguredStructureFeature<?, ?>>> maybeKey = vanilla_result.getSecond().unwrapKey();
 
                 if (maybeKey.isPresent())
                 {

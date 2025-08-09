@@ -5,7 +5,7 @@
   "refmap": "${mod_id}.refmap.json",
   "compatibilityLevel": "${java_version_name}",
   "mixins": [
-    "LevelMixin",
+    "PrimaryLevelDataMixin",
     "ServerPlayerMixin"
   ],
   "client": [],

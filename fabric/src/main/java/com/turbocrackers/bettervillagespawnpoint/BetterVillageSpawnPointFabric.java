@@ -4,11 +4,12 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
 import me.shedaniel.autoconfig.AutoConfig;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import me.shedaniel.autoconfig.serializer.Toml4jConfigSerializer;
@@ -38,8 +39,9 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
         server.execute(() -> CommonClass.m_VillageLocator.FindVillageAndSpawn(server));
     }
 
-    private void registerCommands() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+    private void registerCommands()
+    {
+        CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
             if (BlockDebugger.DEBUG_ENABLED) {
                 registerDebugCommands(dispatcher);
             }
@@ -73,7 +75,7 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
                         .executes(context -> {
                             ServerLevel level = context.getSource().getLevel();
                             BlockPos sharedSpawnPos = level.getSharedSpawnPos();
-                            Objects.requireNonNull(context.getSource().getPlayer())
+                            Objects.requireNonNull(context.getSource().getPlayerOrException())
                                     .teleportTo(sharedSpawnPos.getX() + 0.5, sharedSpawnPos.getY() + 0.1, sharedSpawnPos.getZ() + 0.5);
                             return 1;
                         })

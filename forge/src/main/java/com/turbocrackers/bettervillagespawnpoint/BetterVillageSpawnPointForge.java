@@ -66,9 +66,10 @@ public class BetterVillageSpawnPointForge
                             .requires(source -> source.hasPermission(2))
                             .executes(context ->
                                       {
-                                          ServerLevel level = context.getSource().getLevel();
-                                          BlockPos shared_spawn_pos = level.getSharedSpawnPos();
-                                          Objects.requireNonNull(context.getSource().getPlayer()).teleportTo(shared_spawn_pos.getX() + 0.5, shared_spawn_pos.getY() + 0.1, shared_spawn_pos.getZ() + 0.5);
+                                          net.minecraft.server.level.ServerLevel overworld = context.getSource().getServer().overworld();
+                                          var data = overworld.getLevelData();
+                                          BlockPos shared_spawn_pos = new BlockPos( data.getXSpawn(), data.getYSpawn(), data.getZSpawn() );
+                                          Objects.requireNonNull(context.getSource().getPlayerOrException()).teleportTo(shared_spawn_pos.getX() + 0.5, shared_spawn_pos.getY() + 0.1, shared_spawn_pos.getZ() + 0.5);
                                           return 1;
                                       }));
         }
