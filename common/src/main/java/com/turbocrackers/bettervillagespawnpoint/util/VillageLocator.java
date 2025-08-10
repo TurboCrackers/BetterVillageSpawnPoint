@@ -5,6 +5,9 @@ import com.turbocrackers.bettervillagespawnpoint.CommonClass;
 import com.turbocrackers.bettervillagespawnpoint.Constants;
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.dimension.LevelStem;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.*;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -53,6 +56,9 @@ public class VillageLocator
     @Nullable
     public static ArrayList<Pair<BlockPos, Holder<Structure>>> findNearestMapStructures(ServerLevel level, HolderSet<Structure> pStructure, BlockPos origin, int searchRadius, boolean skipKnownStructures)
     {
+        // We are searching in chunks- NOT blocks.
+        searchRadius = searchRadius / 16;
+
         ChunkGeneratorStructureState generatorState = level.getChunkSource().getGeneratorState();
         StructureManager structureManager = level.structureManager();
 
@@ -178,7 +184,7 @@ public class VillageLocator
 
                         if (candidate != null)
                         {
-                            return candidate; // ✅ Stop at first found structure
+                            return candidate;
                         }
                     }
                 }
@@ -834,6 +840,12 @@ public class VillageLocator
                     continue;
                 }
 
+                if( !WillVillageIdEverGenerate( level, resource_location ))
+                {
+                    Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' won't ever generate!", config_entry);
+                    continue;
+                }
+
                 village_holders.add(structure_holder.get());
             }
         }
@@ -874,15 +886,42 @@ public class VillageLocator
             return;
         }
 
-        HolderSet<Structure> vanillaVillages = HolderSet.direct(List.of(
+        var test = List.of(
                 structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_PLAINS.location())),
                 structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_DESERT.location())),
                 structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_SAVANNA.location())),
                 structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_TAIGA.location())),
                 structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_SNOWY.location()))
-                                                                       ));
+                          );
 
-        ArrayList<Pair<BlockPos, Holder<Structure>>> vanilla_results = VillageLocator.findNearestMapStructures(level, vanillaVillages, BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
+        List<ResourceLocation> valid_vanilla_villages = new ArrayList<>();
+        if( WillVillageIdEverGenerate( level, ResourceLocation.parse("minecraft:village_plains") ))
+            valid_vanilla_villages.add(ResourceLocation.parse("minecraft:village_plains"));
+        if( WillVillageIdEverGenerate( level, ResourceLocation.parse("minecraft:village_desert") ))
+            valid_vanilla_villages.add(ResourceLocation.parse("minecraft:village_desert"));
+        if( WillVillageIdEverGenerate( level, ResourceLocation.parse("minecraft:village_savanna") ))
+            valid_vanilla_villages.add(ResourceLocation.parse("minecraft:village_savanna"));
+        if( WillVillageIdEverGenerate( level, ResourceLocation.parse("minecraft:village_snowy") ))
+            valid_vanilla_villages.add(ResourceLocation.parse("minecraft:village_snowy"));
+        if( WillVillageIdEverGenerate( level, ResourceLocation.parse("minecraft:village_taiga") ))
+            valid_vanilla_villages.add(ResourceLocation.parse("minecraft:village_taiga"));
+
+        // Yell if no vanilla villages could be found.
+        if(valid_vanilla_villages.isEmpty())
+        {
+            OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+            return;
+        }
+
+        List<Holder<Structure>> holders = new ArrayList<>();
+        for (ResourceLocation id : valid_vanilla_villages) {
+            structureRegistry.getHolder(ResourceKey.create(Registries.STRUCTURE, id))
+                    .ifPresent(holders::add);
+        }
+
+        HolderSet<Structure> villageHolders = HolderSet.direct(holders);
+
+        ArrayList<Pair<BlockPos, Holder<Structure>>> vanilla_results = VillageLocator.findNearestMapStructures(level, villageHolders, BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
         if (vanilla_results != null)
         {
             for (Pair<BlockPos, Holder<Structure>> vanilla_result : vanilla_results)
@@ -897,17 +936,84 @@ public class VillageLocator
                     {
                         return;
                     }
-                    OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_VILLAGE_FOUND_BUT_NO_VALID_SPAWN_POS);
-                }
-                else
-                {
-                    OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+                    else
+                    {
+                        OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_VILLAGE_FOUND_BUT_NO_VALID_SPAWN_POS);
+                    }
                 }
             }
         }
-        else
-        {
-            OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+        OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+    }
+
+    Boolean WillVillageIdEverGenerate( ServerLevel level, ResourceLocation resource_location )
+    {
+        var server = level.getServer();
+        var access = server.registryAccess();
+        var structureReg = access.registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE);
+        var structureSetReg = access.registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE_SET);
+
+        Registry<Structure> structReg = access.registryOrThrow(Registries.STRUCTURE);
+        Registry<StructureSet> setReg = access.registryOrThrow(Registries.STRUCTURE_SET);
+
+        // 1) Exists?
+        ResourceKey<Structure> key = ResourceKey.create(Registries.STRUCTURE, resource_location);
+        Optional<Holder.Reference<Structure>> structHolderOpt = structReg.getHolder(key);
+        if (structHolderOpt.isEmpty()) {
+            return false;
         }
+        Holder<Structure> structHolder = structHolderOpt.get();
+        Structure structure = structHolder.value();
+
+        // 2) Is it in any StructureSet used by this dimension?
+        // (Dimension usage is encoded via the generator's structure settings; but iterating all sets
+        //  is safe because only sets actually attached to this generator are consulted at runtime.
+        //  If another mod detached vanilla sets, we simply won’t find entries that matter.)
+        List<StructureSet> setsContaining = new ArrayList<>();
+        for (Holder<StructureSet> setH : setReg.holders().toList()) {
+            for (StructureSet.StructureSelectionEntry e : setH.value().structures()) {
+                if (e.structure() == structHolder) {
+                    setsContaining.add(setH.value());
+                    break;
+                }
+            }
+        }
+        if (setsContaining.isEmpty())
+        {
+            return false;
+        }
+
+        // 3) Biome intersection check
+        // Structures only attempt to generate in their allowed biomes.
+        Set<Holder<Biome>> possibleWorldBiomes =
+                level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes();
+        HolderSet<Biome> allowed = structure.biomes(); // the structure’s allowed biome set
+
+        boolean biomesIntersect = allowed.stream().anyMatch(possibleWorldBiomes::contains);
+        if (!biomesIntersect) {
+            return false;
+        }
+
+        // 4) Placement sanity (not strictly required, but helpful to catch degenerate configs)
+        boolean hasValidPlacement = false;
+        for (StructureSet set : setsContaining) {
+            StructurePlacement p = set.placement();
+            if (p instanceof RandomSpreadStructurePlacement rsp) {
+                // spacing > 0 is enough to say it can, at least in principle
+                if (rsp.spacing() > 0) {
+                    hasValidPlacement = true;
+                    break;
+                }
+            } else {
+                // Other placements exist; assume valid unless obviously broken
+                hasValidPlacement = true;
+                break;
+            }
+        }
+        if (!hasValidPlacement) {
+            return false;
+        }
+
+        return true;
     }
 }
