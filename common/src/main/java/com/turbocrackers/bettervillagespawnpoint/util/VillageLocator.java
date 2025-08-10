@@ -938,11 +938,11 @@ public class VillageLocator
         }
 
         var test = List.of(
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_PLAINS.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_DESERT.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_SAVANNA.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_TAIGA.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_SNOWY.location()))
+                structureRegistry.getOrThrow(ResourceKey.create(Registry.STRUCTURE_REGISTRY, BuiltinStructures.VILLAGE_PLAINS.location())),
+                structureRegistry.getOrThrow(ResourceKey.create(Registry.STRUCTURE_REGISTRY, BuiltinStructures.VILLAGE_DESERT.location())),
+                structureRegistry.getOrThrow(ResourceKey.create(Registry.STRUCTURE_REGISTRY, BuiltinStructures.VILLAGE_SAVANNA.location())),
+                structureRegistry.getOrThrow(ResourceKey.create(Registry.STRUCTURE_REGISTRY, BuiltinStructures.VILLAGE_TAIGA.location())),
+                structureRegistry.getOrThrow(ResourceKey.create(Registry.STRUCTURE_REGISTRY, BuiltinStructures.VILLAGE_SNOWY.location()))
                           );
 
         List<ResourceLocation> valid_vanilla_villages = new ArrayList<>();
@@ -966,7 +966,7 @@ public class VillageLocator
 
         List<Holder<Structure>> holders = new ArrayList<>();
         for (ResourceLocation id : valid_vanilla_villages) {
-            structureRegistry.getHolder(ResourceKey.create(Registries.STRUCTURE, id))
+            structureRegistry.getHolder(ResourceKey.create(Registry.STRUCTURE_REGISTRY, id))
                     .ifPresent(holders::add);
         }
 
@@ -1001,29 +1001,19 @@ public class VillageLocator
     {
         var server = level.getServer();
         var access = server.registryAccess();
-        var structureReg = access.registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE);
-        var structureSetReg = access.registryOrThrow(net.minecraft.core.registries.Registries.STRUCTURE_SET);
+        Registry<Structure> structureReg =
+                access.registryOrThrow(Registry.STRUCTURE_REGISTRY);
 
-        Registry<Structure> structReg = access.registryOrThrow(Registries.STRUCTURE);
-        Registry<StructureSet> setReg = access.registryOrThrow(Registries.STRUCTURE_SET);
+        Registry<StructureSet> structureSetReg =
+                access.registryOrThrow(Registry.STRUCTURE_SET_REGISTRY);
 
-        // 1) Exists?
-        ResourceKey<Structure> key = ResourceKey.create(Registries.STRUCTURE, resource_location);
-        Optional<Holder.Reference<Structure>> structHolderOpt = structReg.getHolder(key);
-        if (structHolderOpt.isEmpty()) {
-            return false;
-        }
-        Holder<Structure> structHolder = structHolderOpt.get();
-        Structure structure = structHolder.value();
-
-        // 2) Is it in any StructureSet used by this dimension?
-        // (Dimension usage is encoded via the generator's structure settings; but iterating all sets
-        //  is safe because only sets actually attached to this generator are consulted at runtime.
-        //  If another mod detached vanilla sets, we simply won’t find entries that matter.)
+        ResourceKey<Structure> key =
+                ResourceKey.create(Registry.STRUCTURE_REGISTRY, resource_location);
+        Structure structure = structureReg.get(key);
         List<StructureSet> setsContaining = new ArrayList<>();
-        for (Holder<StructureSet> setH : setReg.holders().toList()) {
+        for (Holder<StructureSet> setH : structureSetReg.holders().toList()) {
             for (StructureSet.StructureSelectionEntry e : setH.value().structures()) {
-                if (e.structure() == structHolder) {
+                if (e.structure() == structure) {
                     setsContaining.add(setH.value());
                     break;
                 }
