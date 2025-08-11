@@ -6,6 +6,7 @@ import com.turbocrackers.bettervillagespawnpoint.Constants;
 import it.unimi.dsi.fastutil.objects.Object2ObjectArrayMap;
 import it.unimi.dsi.fastutil.objects.ObjectArraySet;
 import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.chunk.ChunkGenerator;
 import net.minecraft.world.level.dimension.LevelStem;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.*;
@@ -43,9 +44,10 @@ import java.util.*;
 
 public class VillageLocator
 {
+    public static Boolean NEEDS_ERROR_MESSAGE = false;
     private BlockPos m_VillageSpawnPos = BlockPos.ZERO;
     private SpawnInitData.VillageSpawnPointState m_VillageSpawnPointGenerationState = SpawnInitData.VillageSpawnPointState.NOT_STARTED;
-    private SpawnInitData.VillageSpawnPointFailureReason m_VillageSpawnPointFailureReason = SpawnInitData.VillageSpawnPointFailureReason.NONE;
+    public static SpawnInitData.VillageSpawnPointFailureReason m_VillageSpawnPointFailureReason = SpawnInitData.VillageSpawnPointFailureReason.NONE;
     private ArrayList<Block> m_BlockWhitelist = new ArrayList<>();
     private BlockPos m_VillagePos = BlockPos.ZERO;
     private String m_VillageID = "";
@@ -745,6 +747,7 @@ public class VillageLocator
 
     private void OnFailedToGenerateSpawnPos(ServerLevel level, SpawnInitData.VillageSpawnPointFailureReason failure_reason)
     {
+        NEEDS_ERROR_MESSAGE = true;
         Constants.LOG.error("[Better Village Spawn Point] Failed to find a spawn point for village. Failure reason: {}", failure_reason);
         m_VillageSpawnPos = BlockPos.ZERO;
         m_VillagePos = BlockPos.ZERO;
@@ -858,6 +861,41 @@ public class VillageLocator
             }
         }
 
+        if( !FindValidVillageAndSpawn( level, village_holders ) && CommonClass.m_Config.UseVanillaFallback() )
+        {
+            List<Holder<Structure>> vanilla_holders = new ArrayList<>();
+
+            ChunkGenerator chunkGenerator = level.getChunkSource().getGenerator();
+            Pair<BlockPos, Holder<Structure>> vanilla_result = chunkGenerator.findNearestMapStructure(level, HolderSet.direct(vanilla_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
+            if( vanilla_result == null )
+            {
+                OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+                return;
+            }
+
+            BlockPos pos = vanilla_result.getFirst();
+            Holder<Structure> structure = vanilla_result.getSecond();
+
+            Optional<ResourceKey<Structure>> key = structure.unwrapKey();
+            if (key.isEmpty())
+            {
+                OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+                return;
+            }
+
+            ResourceLocation id = key.get().location();
+            Constants.LOG.info("[Better Village Spawn Point] Found {} at {}", id, pos);
+            if (findSpawnPosInVillage(level, pos, id.toString()))
+            {
+                return;
+            }
+        }
+
+        OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+    }
+
+    Boolean FindValidVillageAndSpawn( ServerLevel level, List<Holder<Structure>> village_holders )
+    {
         ArrayList<Pair<BlockPos, Holder<Structure>>> results = VillageLocator.findNearestMapStructures(level, HolderSet.direct(village_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
         if (results != null)
         {
@@ -877,81 +915,15 @@ public class VillageLocator
                 Constants.LOG.info("[Better Village Spawn Point] Found {} at {}", id, pos);
                 if (findSpawnPosInVillage(level, pos, id.toString()))
                 {
-                    return;
+                    return true;
                 }
 
                 OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VILLAGE_FOUND_BUT_NO_VALID_SPAWN_POS);
             }
         }
-        else
-        {
-            OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.NO_VILLAGE_FOUND);
-        }
 
-        // If we made it this far, we didn't find any villages :( Can we at least use a fallback?
-        if (!CommonClass.m_Config.UseVanillaFallback())
-        {
-            return;
-        }
-
-        var test = List.of(
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_PLAINS.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_DESERT.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_SAVANNA.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_TAIGA.location())),
-                structureLookup.getOrThrow(ResourceKey.create(Registries.STRUCTURE, BuiltinStructures.VILLAGE_SNOWY.location()))
-                          );
-
-        List<ResourceLocation> valid_vanilla_villages = new ArrayList<>();
-        if( WillVillageIdEverGenerate( level, new ResourceLocation("minecraft", "village_plains") ))
-            valid_vanilla_villages.add(new ResourceLocation("minecraft", "village_plains"));
-        if( WillVillageIdEverGenerate( level, new ResourceLocation("minecraft", "village_desert") ))
-            valid_vanilla_villages.add(new ResourceLocation("minecraft", "village_desert"));
-        if( WillVillageIdEverGenerate( level, new ResourceLocation("minecraft", "village_savanna") ))
-            valid_vanilla_villages.add(new ResourceLocation("minecraft", "village_savanna"));
-        if( WillVillageIdEverGenerate( level, new ResourceLocation("minecraft", "village_snowy") ))
-            valid_vanilla_villages.add(new ResourceLocation("minecraft", "village_snowy"));
-        if( WillVillageIdEverGenerate( level, new ResourceLocation("minecraft", "village_taiga") ))
-            valid_vanilla_villages.add(new ResourceLocation("minecraft", "village_taiga"));
-
-        // Yell if no vanilla villages could be found.
-        if(valid_vanilla_villages.isEmpty())
-        {
-            OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
-            return;
-        }
-
-        List<Holder<Structure>> holders = new ArrayList<>();
-        for (ResourceLocation id : valid_vanilla_villages) {
-            structureRegistry.getHolder(ResourceKey.create(Registries.STRUCTURE, id))
-                    .ifPresent(holders::add);
-        }
-
-        HolderSet<Structure> villageHolders = HolderSet.direct(holders);
-
-        ArrayList<Pair<BlockPos, Holder<Structure>>> vanilla_results = VillageLocator.findNearestMapStructures(level, villageHolders, BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false);
-        if (vanilla_results != null)
-        {
-            for (Pair<BlockPos, Holder<Structure>> vanilla_result : vanilla_results)
-            {
-                Optional<ResourceKey<Structure>> maybeKey = vanilla_result.getSecond().unwrapKey();
-
-                if (maybeKey.isPresent())
-                {
-                    ResourceLocation id = maybeKey.get().location();
-                    Constants.LOG.info("[Better Village Spawn Point] Found {} at {}", id, vanilla_result.getSecond());
-                    if (findSpawnPosInVillage(level, vanilla_result.getFirst(), id.toString()))
-                    {
-                        return;
-                    }
-                    else
-                    {
-                        OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_VILLAGE_FOUND_BUT_NO_VALID_SPAWN_POS);
-                    }
-                }
-            }
-        }
-        OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+        OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.NO_VILLAGE_FOUND);
+        return false;
     }
 
     Boolean WillVillageIdEverGenerate( ServerLevel level, ResourceLocation resource_location )
@@ -978,11 +950,17 @@ public class VillageLocator
         //  is safe because only sets actually attached to this generator are consulted at runtime.
         //  If another mod detached vanilla sets, we simply won’t find entries that matter.)
         List<StructureSet> setsContaining = new ArrayList<>();
-        for (Holder<StructureSet> setH : setReg.holders().toList()) {
-            for (StructureSet.StructureSelectionEntry e : setH.value().structures()) {
-                if (e.structure() == structHolder) {
-                    setsContaining.add(setH.value());
-                    break;
+        for (Holder<StructureSet> setH : setReg.holders().toList())
+        {
+            for (StructureSet.StructureSelectionEntry e : setH.value().structures())
+            {
+                if (e.structure() == structHolder)
+                {
+                    if( e.weight() > 0 )
+                    {
+                        setsContaining.add(setH.value());
+                        break;
+                    }
                 }
             }
         }
