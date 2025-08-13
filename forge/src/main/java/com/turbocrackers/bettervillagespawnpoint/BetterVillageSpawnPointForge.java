@@ -23,8 +23,6 @@ import java.util.Objects;
 @Mod(Constants.MOD_ID)
 public class BetterVillageSpawnPointForge
 {
-    public static boolean ERROR_MESSAGE_SENT = false;
-
     public BetterVillageSpawnPointForge()
     {
         // Init our common class
@@ -84,27 +82,8 @@ public class BetterVillageSpawnPointForge
     }
 
     @SubscribeEvent
-    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        Objects.requireNonNull(event.getEntity().getServer()).execute(() -> {
-            if (!ERROR_MESSAGE_SENT && VillageLocator.NEEDS_ERROR_MESSAGE)
-            {
-                switch( VillageLocator.m_VillageSpawnPointFailureReason )
-                {
-                    case VANILLA_FALLBACK_FAILED:
-                    {
-                        event.getEntity().sendSystemMessage( Component.literal("[Better Village Spawn Point] No valid village was found, and the vanilla fallback failed. Vanilla villages might not be able to spawn in your modpack.").withStyle(ChatFormatting.RED));
-                        break;
-                    }
-
-                    default:
-                    {
-                        event.getEntity().sendSystemMessage( Component.literal("[Better Village Spawn Point] Village search failed. Failure reason: " + VillageLocator.m_VillageSpawnPointFailureReason).withStyle(ChatFormatting.RED));
-                        break;
-                    }
-                }
-                ERROR_MESSAGE_SENT = true;
-            }
-        });
-
+    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event)
+    {
+        CommonClass.SendErrorMessageIfNeeded( (ServerPlayer)event.getEntity() );
     }
 }

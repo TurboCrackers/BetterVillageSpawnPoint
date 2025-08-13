@@ -1,5 +1,6 @@
 package com.turbocrackers.bettervillagespawnpoint.util;
 
+import com.turbocrackers.bettervillagespawnpoint.Constants;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -7,10 +8,12 @@ import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.saveddata.SavedData;
 import java.util.ArrayList;
+import java.util.function.Consumer;
 
 public class SpawnInitData extends SavedData
 {
@@ -41,8 +44,10 @@ public class SpawnInitData extends SavedData
     public ArrayList<Block> m_BlockWhitelist = new ArrayList<Block>();
     public BlockPos m_VillagePos = BlockPos.ZERO;
     public String m_VillageID = "";
+    public static String SAVE_DATA_ID = "bettervillagespawnpoint_spawn_data";
 
     public static SpawnInitData load(CompoundTag tag) {
+        Constants.LOG.info("[Better Village Spawn Point] Spawn data loaded.");
         SpawnInitData data = new SpawnInitData();
         data.m_State = VillageSpawnPointState.valueOf(tag.getString("VillageSpawnPointState"));
         data.m_VillageSpawnPos = new BlockPos(tag.getInt("VillageSpawnPosX"), tag.getInt("VillageSpawnPosY"), tag.getInt("VillageSpawnPosZ"));
@@ -92,5 +97,22 @@ public class SpawnInitData extends SavedData
         }
         tag.put("BlockWhitelist", listTag);
         return tag;
+    }
+
+    public static void save(ServerLevel level)
+    {
+        level.getServer().executeBlocking(() ->
+        {
+            SpawnInitData data = get(level);
+            data.setDirty();
+
+            level.getDataStorage().save();
+            //level.getServer().saveEverything(false, /*flush*/ true, /*force*/ true);
+        });
+    }
+
+    public static SpawnInitData get(ServerLevel level)
+    {
+        return level.getDataStorage().computeIfAbsent(SpawnInitData::load, SpawnInitData::new, SAVE_DATA_ID);
     }
 }

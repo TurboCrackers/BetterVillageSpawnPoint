@@ -3,8 +3,13 @@ package com.turbocrackers.bettervillagespawnpoint;
 import com.turbocrackers.bettervillagespawnpoint.platform.Services;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
 import com.turbocrackers.bettervillagespawnpoint.util.VillageLocator;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.Items;
+
+import java.util.Objects;
 
 // This class is part of the common project meaning it is shared between all supported loaders. Code written here can only
 // import and access the vanilla codebase, libraries used by vanilla, and optionally third party libraries that provide
@@ -15,24 +20,37 @@ public class CommonClass
     public static CommonConfig m_Config;
     public static BlockDebugger m_BlockDebugger = new BlockDebugger();
     public static VillageLocator m_VillageLocator = new VillageLocator();
+    public static boolean NEEDS_ERROR_MESSAGE = false;
 
     // The loader specific projects are able to import and use any code from the common project. This allows you to
     // write the majority of your code here and load it from your loader specific projects. This example has some
     // code that gets invoked by the entry point of the loader specific projects.
     public static void init()
     {
-        Constants.LOG.info("Hello from Common init on {}! we are currently in a {} environment!", Services.PLATFORM.getPlatformName(), Services.PLATFORM.getEnvironmentName());
-        Constants.LOG.info("The ID for diamonds is {}", BuiltInRegistries.ITEM.getKey(Items.DIAMOND));
+    }
 
-        // It is common for all supported loaders to provide a similar feature that can not be used directly in the
-        // common code. A popular way to get around this is using Java's built-in service loader feature to create
-        // your own abstraction layer. You can learn more about this in our provided services class. In this example
-        // we have an interface in the common code and use a loader specific implementation to delegate our call to
-        // the platform specific approach.
-        //if (Services.PLATFORM.isModLoaded("bettervillagespawnpoint")) {
-        //
-        //    Constants.LOG.info("Hello to bettervillagespawnpoint");
-        //}
+    public static void SendErrorMessageIfNeeded( ServerPlayer player )
+    {
+        Objects.requireNonNull(player.getServer()).execute(() -> {
+            if (NEEDS_ERROR_MESSAGE)
+            {
+                switch( VillageLocator.m_VillageSpawnPointFailureReason )
+                {
+                    case VANILLA_FALLBACK_FAILED:
+                    {
+                        player.sendSystemMessage( Component.literal("[Better Village Spawn Point] No valid village was found, and the vanilla fallback failed. Vanilla villages might not be able to spawn in your modpack.").withStyle(ChatFormatting.RED));
+                        break;
+                    }
+
+                    default:
+                    {
+                        player.sendSystemMessage( Component.literal("[Better Village Spawn Point] Village search failed. Failure reason: " + VillageLocator.m_VillageSpawnPointFailureReason).withStyle(ChatFormatting.RED));
+                        break;
+                    }
+                }
+                NEEDS_ERROR_MESSAGE = false;
+            }
+        });
     }
 
 }
