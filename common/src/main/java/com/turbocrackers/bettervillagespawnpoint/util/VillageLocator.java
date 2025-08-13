@@ -329,7 +329,7 @@ public class VillageLocator
     private static final ArrayList<TagKey<Block>> BODY_BLOCK_TAG_BLACKLIST = new ArrayList<>(Arrays.asList(BlockTags.FENCES,
                                                                                                            BlockTags.WALLS,
                                                                                                            BlockTags.SAPLINGS,
-                                                                                                           BlockTags.MAINTAINS_FARMLAND
+                                                                                                           BlockTags.CROPS
                                                                                                           ));
 
     private static final ArrayList<Block> GROUND_BLOCK_BLACKLIST = new ArrayList<>(Arrays.asList(Blocks.FARMLAND,
