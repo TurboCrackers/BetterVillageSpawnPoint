@@ -2,17 +2,22 @@ package com.turbocrackers.bettervillagespawnpoint;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
+import com.turbocrackers.bettervillagespawnpoint.util.VillageLocator;
 import me.shedaniel.autoconfig.AutoConfig;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.PlayerChatMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import me.shedaniel.autoconfig.serializer.Toml4jConfigSerializer;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Objects;
 
@@ -33,15 +38,17 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
 
         // Register commands
         registerCommands();
+
+        // Register join listener
+        registerPlayerJoinListener();
     }
 
     private void onServerStarted(MinecraftServer server) {
         server.execute(() -> CommonClass.m_VillageLocator.FindVillageAndSpawn(server));
     }
 
-    private void registerCommands()
-    {
-        CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
+    private void registerCommands() {
+        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
             if (BlockDebugger.DEBUG_ENABLED) {
                 registerDebugCommands(dispatcher);
             }
@@ -75,10 +82,18 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
                         .executes(context -> {
                             ServerLevel level = context.getSource().getLevel();
                             BlockPos sharedSpawnPos = level.getSharedSpawnPos();
-                            Objects.requireNonNull(context.getSource().getPlayerOrException())
+                            Objects.requireNonNull(context.getSource().getPlayer())
                                     .teleportTo(sharedSpawnPos.getX() + 0.5, sharedSpawnPos.getY() + 0.1, sharedSpawnPos.getZ() + 0.5);
                             return 1;
                         })
                            );
+    }
+
+    private void registerPlayerJoinListener()
+    {
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+        {
+            CommonClass.SendErrorMessageIfNeeded( handler.player );
+        });
     }
 }

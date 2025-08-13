@@ -1,11 +1,18 @@
 package com.turbocrackers.bettervillagespawnpoint;
 
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
+import com.turbocrackers.bettervillagespawnpoint.util.SpawnInitData;
+import com.turbocrackers.bettervillagespawnpoint.util.VillageLocator;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.ModLoadingContext;
@@ -73,5 +80,11 @@ public class BetterVillageSpawnPointForge
                                           return 1;
                                       }));
         }
+    }
+
+    @SubscribeEvent
+    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event)
+    {
+        CommonClass.SendErrorMessageIfNeeded( (ServerPlayer)event.getEntity() );
     }
 }
