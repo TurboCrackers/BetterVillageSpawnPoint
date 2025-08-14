@@ -9,7 +9,6 @@ import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkGenerator;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.*;
-import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
@@ -24,7 +23,6 @@ import net.minecraft.world.level.block.BushBlock;
 import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.ChunkAccess;
-import net.minecraft.world.level.chunk.ChunkGeneratorStructureState;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.level.levelgen.structure.*;
@@ -117,7 +115,7 @@ public class VillageLocator
         ChunkAccess chunk = level.getChunk(chunk_pos.x, chunk_pos.z);
 
         // Search within that chunk for the village
-        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
+        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
         ResourceLocation structureId = ResourceLocation.tryParse(nearest_village_tag_or_id);
         Structure structure = structureRegistry.get(structureId);
         if (structure == null)
@@ -323,13 +321,12 @@ public class VillageLocator
 
     private static final ArrayList<Block> BODY_BLOCK_BLACKLIST = new ArrayList<>(Arrays.asList(Blocks.SWEET_BERRY_BUSH,
                                                                                                Blocks.SUGAR_CANE,
-                                                                                               Blocks.BAMBOO_BLOCK,
                                                                                                Blocks.TALL_GRASS));
 
     private static final ArrayList<TagKey<Block>> BODY_BLOCK_TAG_BLACKLIST = new ArrayList<>(Arrays.asList(BlockTags.FENCES,
                                                                                                            BlockTags.WALLS,
                                                                                                            BlockTags.SAPLINGS,
-                                                                                                           BlockTags.MAINTAINS_FARMLAND
+                                                                                                           BlockTags.CROPS
                                                                                                           ));
 
     private static final ArrayList<Block> GROUND_BLOCK_BLACKLIST = new ArrayList<>(Arrays.asList(Blocks.FARMLAND,
@@ -663,12 +660,12 @@ public class VillageLocator
             return;
         }
 
-        // Set up our list of structure tags and IDs
-        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registries.STRUCTURE);
-        List<Holder<Structure>> village_holders = new ArrayList<>();
-        HolderLookup.RegistryLookup<Structure> structureLookup = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
+        Registry<Structure> structureRegistry =
+                level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
 
-        // Populate the array of holders
+        List<Holder<Structure>> village_holders = new ArrayList<>();
+
+// Populate the array of holders
         List<String> structure_ids = new ArrayList<>(CommonClass.m_Config.GetStructureList());
         for (String config_entry : structure_ids)
         {
@@ -680,11 +677,23 @@ public class VillageLocator
 
             if (config_entry.startsWith("#"))
             {
-                TagKey<Structure> tagKey = TagKey.create(Registries.STRUCTURE, ResourceLocation.tryParse(config_entry.substring(1)));
-                structureLookup.get(tagKey).ifPresentOrElse(
-                        holders -> holders.forEach(village_holders::add),
-                        () -> Constants.LOG.warn("[Better Village Spawn Point] Structure tag '{}' not found in registry! Skipping.", config_entry)
-                                                           );
+                // Tag path after '#'
+                ResourceLocation tagLoc = ResourceLocation.tryParse(config_entry.substring(1));
+                if (tagLoc == null)
+                {
+                    Constants.LOG.warn("[Better Village Spawn Point] '{}' is not a valid structure tag! Skipping.", config_entry);
+                    continue;
+                }
+
+                TagKey<Structure> tagKey = TagKey.create(Registry.STRUCTURE_REGISTRY, tagLoc);
+
+                // 1.19.2: use getTagOrEmpty (returns empty set if missing)
+                HolderSet<Structure> holders = (HolderSet<Structure>) structureRegistry.getTagOrEmpty(tagKey);
+                if (holders.size() > 0 ) {
+                    holders.forEach(village_holders::add);
+                } else {
+                    Constants.LOG.warn("[Better Village Spawn Point] Structure tag '{}' not found in registry! Skipping.", config_entry);
+                }
                 continue;
             }
             else
@@ -696,14 +705,16 @@ public class VillageLocator
                     continue;
                 }
 
-                ResourceKey<Structure> key = ResourceKey.create(Registries.STRUCTURE, resource_location);
-                Optional<Holder.Reference<Structure>> structure_holder = structureLookup.get(key);
+                ResourceKey<Structure> key = ResourceKey.create(Registry.STRUCTURE_REGISTRY, resource_location);
+
+                // 1.19.2: getHolder on the Registry
+                Optional<Holder<Structure>> structure_holder = structureRegistry.getHolder(key);
                 if (structure_holder.isEmpty()) {
                     Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' not found in registry! Skipping.", config_entry);
                     continue;
                 }
 
-                if( !WillVillageIdEverGenerate( level, resource_location ))
+                if (!WillVillageIdEverGenerate(level, resource_location))
                 {
                     Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' won't ever generate!", config_entry);
                     continue;
@@ -766,24 +777,28 @@ public class VillageLocator
     Boolean WillVillageIdEverGenerate( ServerLevel level, ResourceLocation resource_location )
     {
         // 1) server / world option
-        if (!level.getServer().getWorldData().worldGenOptions().generateStructures()) return false;
+        if (!level.getServer().getWorldData().worldGenSettings().generateStructures())
+            return false;
 
         // 2) structure holder
-        ResourceKey<Structure> key = ResourceKey.create(Registries.STRUCTURE, resource_location);
-        HolderGetter<Structure> structures = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
-        Optional<Holder.Reference<Structure>> opt = structures.get(key);
-        if (opt.isEmpty()) return false;
-        Holder<Structure> holder = opt.get();
+        ResourceKey<Structure> key = ResourceKey.create(Registry.STRUCTURE_REGISTRY, resource_location);
+        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
+        Optional<Holder<Structure>> opt = structureRegistry.getHolder(key);
+        if (opt.isEmpty())
+            return false;
 
-        // 3) is this structure actually placed in this level?
-        ChunkGeneratorStructureState state = level.getChunkSource().getGeneratorState();
-        if (state.getPlacementsForStructure(holder).isEmpty()) return false; // not referenced by any StructureSet usable here
+        // 3) is this structure referenced by any StructureSet used in this datapack/world?
+        Holder<Structure> holder = opt.get();
+        Registry<StructureSet> setRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_SET_REGISTRY);
+        boolean referencedAnywhere = setRegistry.stream().anyMatch(set ->
+                set.structures().stream().anyMatch(entry -> entry.structure().equals(holder))
+        );
+        if (!referencedAnywhere) return false;
 
         // 4) any biome in this level can host it?
-        //    (Structure.biomes() is a HolderSet<Biome> predicate)
         Set<Holder<Biome>> possible = level.getChunkSource().getGenerator().getBiomeSource().possibleBiomes();
         boolean anyBiomeOk = holder.value().biomes().stream().anyMatch(possible::contains);
-        if( !anyBiomeOk )
+        if (!anyBiomeOk)
             return false;
 
         return true;
