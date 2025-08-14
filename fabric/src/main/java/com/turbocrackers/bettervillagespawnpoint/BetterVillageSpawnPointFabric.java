@@ -2,16 +2,22 @@ package com.turbocrackers.bettervillagespawnpoint;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
+import com.turbocrackers.bettervillagespawnpoint.util.VillageLocator;
 import me.shedaniel.autoconfig.AutoConfig;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
+import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.PlayerChatMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import me.shedaniel.autoconfig.serializer.Toml4jConfigSerializer;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Objects;
 
@@ -32,6 +38,9 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
 
         // Register commands
         registerCommands();
+
+        // Register join listener
+        registerPlayerJoinListener();
     }
 
     private void onServerStarted(MinecraftServer server) {
@@ -78,5 +87,13 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
                             return 1;
                         })
                            );
+    }
+
+    private void registerPlayerJoinListener()
+    {
+        ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->
+        {
+            CommonClass.SendErrorMessageIfNeeded( handler.player );
+        });
     }
 }
