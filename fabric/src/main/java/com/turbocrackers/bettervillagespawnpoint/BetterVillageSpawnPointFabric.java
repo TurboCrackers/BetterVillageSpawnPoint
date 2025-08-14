@@ -2,22 +2,17 @@ package com.turbocrackers.bettervillagespawnpoint;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
-import com.turbocrackers.bettervillagespawnpoint.util.VillageLocator;
 import me.shedaniel.autoconfig.AutoConfig;
 import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
+import net.fabricmc.fabric.api.command.v1.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
-import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.PlayerChatMessage;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import me.shedaniel.autoconfig.serializer.Toml4jConfigSerializer;
-import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Objects;
 
@@ -48,7 +43,7 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
     }
 
     private void registerCommands() {
-        CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+        CommandRegistrationCallback.EVENT.register((dispatcher, dedicated) -> {
             if (BlockDebugger.DEBUG_ENABLED) {
                 registerDebugCommands(dispatcher);
             }
@@ -58,37 +53,35 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
     private void registerDebugCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
                 Commands.literal("showBlockDebug")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(context -> {
-                            ServerLevel level = context.getSource().getLevel();
+                        .requires(src -> src.hasPermission(2))
+                        .executes(ctx -> {
+                            ServerLevel level = ctx.getSource().getLevel();
                             CommonClass.m_BlockDebugger.ToggleBlockFailureDebug(level, true);
                             return 1;
                         })
-                           );
+        );
 
         dispatcher.register(
                 Commands.literal("hideBlockDebug")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(context -> {
-                            ServerLevel level = context.getSource().getLevel();
+                        .requires(src -> src.hasPermission(2))
+                        .executes(ctx -> {
+                            ServerLevel level = ctx.getSource().getLevel();
                             CommonClass.m_BlockDebugger.ToggleBlockFailureDebug(level, false);
                             return 1;
                         })
-                           );
+        );
 
         dispatcher.register(
                 Commands.literal("spawn")
-                        .requires(source -> source.hasPermission(2))
-                        .executes(context -> {
-                            ServerLevel level = context.getSource().getLevel();
-                            BlockPos sharedSpawnPos = level.getSharedSpawnPos();
-                            Objects.requireNonNull(context.getSource().getPlayer())
-                                    .teleportTo(sharedSpawnPos.getX() + 0.5, sharedSpawnPos.getY() + 0.1, sharedSpawnPos.getZ() + 0.5);
+                        .requires(src -> src.hasPermission(2))
+                        .executes(ctx -> {
+                            ServerLevel level = ctx.getSource().getLevel();
+                            BlockPos spawn = level.getSharedSpawnPos();
+                            Objects.requireNonNull(ctx.getSource().getEntity()).teleportTo(spawn.getX() + 0.5, spawn.getY() + 0.1, spawn.getZ() + 0.5);
                             return 1;
                         })
-                           );
+        );
     }
-
     private void registerPlayerJoinListener()
     {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) ->

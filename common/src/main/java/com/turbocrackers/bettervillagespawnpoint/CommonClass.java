@@ -3,7 +3,10 @@ package com.turbocrackers.bettervillagespawnpoint;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
 import com.turbocrackers.bettervillagespawnpoint.util.VillageLocator;
 import net.minecraft.ChatFormatting;
+import net.minecraft.Util;
+import net.minecraft.network.chat.ChatType;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.TextComponent;
 import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Objects;
@@ -35,13 +38,13 @@ public class CommonClass
                 {
                     case VANILLA_FALLBACK_FAILED:
                     {
-                        player.sendSystemMessage( Component.literal("[Better Village Spawn Point] No valid village was found, and the vanilla fallback failed. Vanilla villages might not be able to spawn in your modpack.").withStyle(ChatFormatting.RED));
+                        player.sendMessage( (new TextComponent("[Better Village Spawn Point] No valid village was found, and the vanilla fallback failed. Vanilla villages might not be able to spawn in your modpack.")).withStyle(ChatFormatting.RED), ChatType.SYSTEM, Util.NIL_UUID);
                         break;
                     }
 
                     default:
                     {
-                        player.sendSystemMessage( Component.literal("[Better Village Spawn Point] Village search failed. Failure reason: " + VillageLocator.m_VillageSpawnPointFailureReason).withStyle(ChatFormatting.RED));
+                        player.sendMessage( (new TextComponent("\"[Better Village Spawn Point] Village search failed. Failure reason: \" + VillageLocator.m_VillageSpawnPointFailureReason")).withStyle(ChatFormatting.RED), ChatType.SYSTEM, Util.NIL_UUID);
                         break;
                     }
                 }

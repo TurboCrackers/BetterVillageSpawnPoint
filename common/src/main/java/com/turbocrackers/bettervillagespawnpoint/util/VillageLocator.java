@@ -4,9 +4,10 @@ import com.mojang.datafixers.util.Either;
 import com.mojang.datafixers.util.Pair;
 import com.turbocrackers.bettervillagespawnpoint.CommonClass;
 import com.turbocrackers.bettervillagespawnpoint.Constants;
-import net.minecraft.tags.StructureTags;
+import net.minecraft.tags.ConfiguredStructureTags;
 import net.minecraft.world.level.biome.Biome;
 import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.levelgen.feature.ConfiguredStructureFeature;
 import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.*;
 import net.minecraft.resources.ResourceKey;
@@ -44,21 +45,21 @@ public class VillageLocator
     private final BlockDebugger m_BlockDebugger = new BlockDebugger();
 
     @Nullable
-    private boolean FindNearestVillageAndSpawn(ServerLevel level, HolderSet<Structure> pStructure, BlockPos origin, int searchRadius, boolean skipKnownStructures)
+    private boolean FindNearestVillageAndSpawn(ServerLevel level, HolderSet<ConfiguredStructureFeature<?, ?>> pStructure, int searchRadius)
     {
         // We are searching in chunks- NOT blocks.
         searchRadius = searchRadius / 16;
 
         ChunkGenerator chunkGenerator = level.getChunkSource().getGenerator();
-        Pair<BlockPos, Holder<Structure>> result = chunkGenerator.findNearestMapStructure( level, pStructure, origin, searchRadius, skipKnownStructures );
+        Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>> result = chunkGenerator.findNearestMapFeature( level, pStructure, BlockPos.ZERO, searchRadius, false);
         if( result == null )
             return false;
 
         // Is valid?
         BlockPos pos = result.getFirst();
-        Holder<Structure> structure = result.getSecond();
+        Holder<ConfiguredStructureFeature<?, ?>> structure = result.getSecond();
 
-        Optional<ResourceKey<Structure>> key = structure.unwrapKey();
+        Optional<ResourceKey<ConfiguredStructureFeature<?, ?>>> key = structure.unwrapKey();
         if (key.isEmpty())
         {
             return false;
@@ -115,16 +116,16 @@ public class VillageLocator
         ChunkAccess chunk = level.getChunk(chunk_pos.x, chunk_pos.z);
 
         // Search within that chunk for the village
-        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
+        Registry<ConfiguredStructureFeature<?, ?>> structureRegistry = level.registryAccess().registryOrThrow(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY);
         ResourceLocation structureId = ResourceLocation.tryParse(nearest_village_tag_or_id);
-        Structure structure = structureRegistry.get(structureId);
+        ConfiguredStructureFeature<?, ?> structure = structureRegistry.get(structureId);
         if (structure == null)
         {
             Constants.LOG.error("[Better Village Spawn Point] How did we get to the point of pre-generating a chunk and the structure wasn't found?? Something is very wrong.");
             OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.UNKNOWN_LOADING_ERROR);
             return false;
         }
-        StructureStart village_start = chunk.getStartForStructure(structure);
+        StructureStart village_start = chunk.getStartForFeature(structure);
         if (village_start == null)
         {
             Constants.LOG.error("[Better Village Spawn Point] How did we get to the point of pre-generating a chunk and the structure was found but the StructureStart wasn't?? Something is very wrong.");
@@ -437,7 +438,7 @@ public class VillageLocator
         }
 
         // Check if movement is blocked. Carpet has collision but is an exception
-        if (!bottom.getCollisionShape(level, pos.above(1)).isEmpty() && !bottom.is(BlockTags.WOOL_CARPETS))
+        if (!bottom.getCollisionShape(level, pos.above(1)).isEmpty() && !bottom.is(BlockTags.CARPETS))
         {
             m_BlockDebugger.AddBlockResult(pos, BlockDebugger.BlockResults.MOVE_BLOCKED);
             return false;
@@ -497,14 +498,14 @@ public class VillageLocator
         BlockPos top_east_pos = pos.above(2).east();
         BlockPos bottom_west_pos = pos.above(1).west();
         BlockPos top_west_pos = pos.above(2).west();
-        if ((!level.getBlockState(bottom_north_pos).getCollisionShape(level, bottom_north_pos).isEmpty() && !level.getBlockState(bottom_north_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(top_north_pos).getCollisionShape(level, top_north_pos).isEmpty() && !level.getBlockState(top_north_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(bottom_south_pos).getCollisionShape(level, bottom_south_pos).isEmpty() && !level.getBlockState(bottom_south_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(top_south_pos).getCollisionShape(level, top_south_pos).isEmpty() && !level.getBlockState(top_south_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(bottom_east_pos).getCollisionShape(level, bottom_east_pos).isEmpty() && !level.getBlockState(bottom_east_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(top_east_pos).getCollisionShape(level, top_east_pos).isEmpty() && !level.getBlockState(top_east_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(bottom_west_pos).getCollisionShape(level, bottom_west_pos).isEmpty() && !level.getBlockState(bottom_west_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(top_west_pos).getCollisionShape(level, top_west_pos).isEmpty() && !level.getBlockState(top_west_pos).is(BlockTags.WOOL_CARPETS)))
+        if ((!level.getBlockState(bottom_north_pos).getCollisionShape(level, bottom_north_pos).isEmpty() && !level.getBlockState(bottom_north_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(top_north_pos).getCollisionShape(level, top_north_pos).isEmpty() && !level.getBlockState(top_north_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(bottom_south_pos).getCollisionShape(level, bottom_south_pos).isEmpty() && !level.getBlockState(bottom_south_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(top_south_pos).getCollisionShape(level, top_south_pos).isEmpty() && !level.getBlockState(top_south_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(bottom_east_pos).getCollisionShape(level, bottom_east_pos).isEmpty() && !level.getBlockState(bottom_east_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(top_east_pos).getCollisionShape(level, top_east_pos).isEmpty() && !level.getBlockState(top_east_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(bottom_west_pos).getCollisionShape(level, bottom_west_pos).isEmpty() && !level.getBlockState(bottom_west_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(top_west_pos).getCollisionShape(level, top_west_pos).isEmpty() && !level.getBlockState(top_west_pos).is(BlockTags.CARPETS)))
         {
             m_BlockDebugger.AddBlockResult(pos, BlockDebugger.BlockResults.COLLISION_NSEW);
             return false;
@@ -519,14 +520,14 @@ public class VillageLocator
         BlockPos NW_top_pos = pos.above(2).north().west();
         BlockPos SW_bottom_pos = pos.above(1).south().west();
         BlockPos SW_top_pos = pos.above(2).south().west();
-        if ((!level.getBlockState(NE_bottom_pos).getCollisionShape(level, NE_bottom_pos).isEmpty() && !level.getBlockState(NE_bottom_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(NE_top_pos).getCollisionShape(level, NE_top_pos).isEmpty() && !level.getBlockState(NE_top_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(SE_bottom_pos).getCollisionShape(level, SE_bottom_pos).isEmpty() && !level.getBlockState(SE_bottom_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(SE_top_pos).getCollisionShape(level, SE_top_pos).isEmpty() && !level.getBlockState(SE_top_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(NW_bottom_pos).getCollisionShape(level, NW_bottom_pos).isEmpty() && !level.getBlockState(NW_bottom_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(NW_top_pos).getCollisionShape(level, NW_top_pos).isEmpty() && !level.getBlockState(NW_top_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(SW_bottom_pos).getCollisionShape(level, SW_bottom_pos).isEmpty() && !level.getBlockState(SW_bottom_pos).is(BlockTags.WOOL_CARPETS)) ||
-            (!level.getBlockState(SW_top_pos).getCollisionShape(level, SW_top_pos).isEmpty() && !level.getBlockState(SW_top_pos).is(BlockTags.WOOL_CARPETS)))
+        if ((!level.getBlockState(NE_bottom_pos).getCollisionShape(level, NE_bottom_pos).isEmpty() && !level.getBlockState(NE_bottom_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(NE_top_pos).getCollisionShape(level, NE_top_pos).isEmpty() && !level.getBlockState(NE_top_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(SE_bottom_pos).getCollisionShape(level, SE_bottom_pos).isEmpty() && !level.getBlockState(SE_bottom_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(SE_top_pos).getCollisionShape(level, SE_top_pos).isEmpty() && !level.getBlockState(SE_top_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(NW_bottom_pos).getCollisionShape(level, NW_bottom_pos).isEmpty() && !level.getBlockState(NW_bottom_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(NW_top_pos).getCollisionShape(level, NW_top_pos).isEmpty() && !level.getBlockState(NW_top_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(SW_bottom_pos).getCollisionShape(level, SW_bottom_pos).isEmpty() && !level.getBlockState(SW_bottom_pos).is(BlockTags.CARPETS)) ||
+            (!level.getBlockState(SW_top_pos).getCollisionShape(level, SW_top_pos).isEmpty() && !level.getBlockState(SW_top_pos).is(BlockTags.CARPETS)))
         {
             m_BlockDebugger.AddBlockResult(pos, BlockDebugger.BlockResults.COLLISION_DIAG);
             return false;
@@ -660,10 +661,8 @@ public class VillageLocator
             return;
         }
 
-        Registry<Structure> structureRegistry =
-                level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
-
-        List<Holder<Structure>> village_holders = new ArrayList<>();
+        Registry<ConfiguredStructureFeature<?, ?>> structureRegistry = level.registryAccess().registryOrThrow(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY);
+        List<Holder<ConfiguredStructureFeature<?, ?>>> village_holders = new ArrayList<>();
 
 // Populate the array of holders
         List<String> structure_ids = new ArrayList<>(CommonClass.m_Config.GetStructureList());
@@ -685,10 +684,10 @@ public class VillageLocator
                     continue;
                 }
 
-                TagKey<Structure> tagKey = TagKey.create(Registry.STRUCTURE_REGISTRY, tagLoc);
+                TagKey<ConfiguredStructureFeature<?, ?>> tagKey = TagKey.create(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY, tagLoc);
 
                 // 1.19.2: use getTagOrEmpty (returns empty set if missing)
-                HolderSet<Structure> holders = (HolderSet<Structure>) structureRegistry.getTagOrEmpty(tagKey);
+                HolderSet<ConfiguredStructureFeature<?, ?>> holders = (HolderSet<ConfiguredStructureFeature<?, ?>>) structureRegistry.getTagOrEmpty(tagKey);
                 if (holders.size() > 0 ) {
                     holders.forEach(village_holders::add);
                 } else {
@@ -705,10 +704,10 @@ public class VillageLocator
                     continue;
                 }
 
-                ResourceKey<Structure> key = ResourceKey.create(Registry.STRUCTURE_REGISTRY, resource_location);
+                ResourceKey<ConfiguredStructureFeature<?, ?>> key = ResourceKey.create(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY, resource_location);
 
                 // 1.19.2: getHolder on the Registry
-                Optional<Holder<Structure>> structure_holder = structureRegistry.getHolder(key);
+                Optional<Holder<ConfiguredStructureFeature<?, ?>>> structure_holder = structureRegistry.getHolder(key);
                 if (structure_holder.isEmpty()) {
                     Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' not found in registry! Skipping.", config_entry);
                     continue;
@@ -724,7 +723,7 @@ public class VillageLocator
             }
         }
 
-        if( !FindNearestVillageAndSpawn(level, HolderSet.direct(village_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false) )
+        if( !FindNearestVillageAndSpawn(level, HolderSet.direct(village_holders), CommonClass.m_Config.GetSearchRadius()) )
         {
             if( !CommonClass.m_Config.UseVanillaFallback() )
             {
@@ -732,10 +731,10 @@ public class VillageLocator
                 return;
             }
 
-            List<Holder<Structure>> vanilla_holders = new ArrayList<>();
-            for (Holder<Structure> holder : structureRegistry.getTagOrEmpty(StructureTags.VILLAGE))
+            List<Holder<ConfiguredStructureFeature<?, ?>>> vanilla_holders = new ArrayList<>();
+            for (Holder<ConfiguredStructureFeature<?, ?>> holder : structureRegistry.getTagOrEmpty(ConfiguredStructureTags.VILLAGE))
             {
-                Either<ResourceKey<Structure>, Structure> structure = holder.unwrap();
+                Either<ResourceKey<ConfiguredStructureFeature<?, ?>>, ConfiguredStructureFeature<?, ?>> structure = holder.unwrap();
                 if( structure.left().isPresent() )
                 {
                     if( WillVillageIdEverGenerate(level, structure.left().get().location() ) )
@@ -746,7 +745,7 @@ public class VillageLocator
             }
 
             ChunkGenerator chunkGenerator = level.getChunkSource().getGenerator();
-            Pair<BlockPos, Holder<Structure>> vanilla_result = chunkGenerator.findNearestMapStructure(level, HolderSet.direct(vanilla_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius() / 16, false);
+            Pair<BlockPos, Holder<ConfiguredStructureFeature<?, ?>>> vanilla_result = chunkGenerator.findNearestMapFeature(level, HolderSet.direct(vanilla_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius() / 16, false);
             if( vanilla_result == null )
             {
                 OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
@@ -754,9 +753,9 @@ public class VillageLocator
             }
 
             BlockPos pos = vanilla_result.getFirst();
-            Holder<Structure> structure = vanilla_result.getSecond();
+            Holder<ConfiguredStructureFeature<?, ?>> structure = vanilla_result.getSecond();
 
-            Optional<ResourceKey<Structure>> key = structure.unwrapKey();
+            Optional<ResourceKey<ConfiguredStructureFeature<?, ?>>> key = structure.unwrapKey();
             if (key.isEmpty())
             {
                 OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
@@ -777,18 +776,18 @@ public class VillageLocator
     Boolean WillVillageIdEverGenerate( ServerLevel level, ResourceLocation resource_location )
     {
         // 1) server / world option
-        if (!level.getServer().getWorldData().worldGenSettings().generateStructures())
+        if (!level.getServer().getWorldData().worldGenSettings().generateFeatures())
             return false;
 
         // 2) structure holder
-        ResourceKey<Structure> key = ResourceKey.create(Registry.STRUCTURE_REGISTRY, resource_location);
-        Registry<Structure> structureRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_REGISTRY);
-        Optional<Holder<Structure>> opt = structureRegistry.getHolder(key);
+        ResourceKey<ConfiguredStructureFeature<?, ?>> key = ResourceKey.create(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY, resource_location);
+        Registry<ConfiguredStructureFeature<?, ?>> structureRegistry = level.registryAccess().registryOrThrow(Registry.CONFIGURED_STRUCTURE_FEATURE_REGISTRY);
+        Optional<Holder<ConfiguredStructureFeature<?, ?>>> opt = structureRegistry.getHolder(key);
         if (opt.isEmpty())
             return false;
 
         // 3) is this structure referenced by any StructureSet used in this datapack/world?
-        Holder<Structure> holder = opt.get();
+        Holder<ConfiguredStructureFeature<?, ?>> holder = opt.get();
         Registry<StructureSet> setRegistry = level.registryAccess().registryOrThrow(Registry.STRUCTURE_SET_REGISTRY);
         boolean referencedAnywhere = setRegistry.stream().anyMatch(set ->
                 set.structures().stream().anyMatch(entry -> entry.structure().equals(holder))
