@@ -1,8 +1,7 @@
 package com.turbocrackers.bettervillagespawnpoint.util;
 
+import com.turbocrackers.bettervillagespawnpoint.Constants;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -12,11 +11,10 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.saveddata.SavedData;
 import org.jetbrains.annotations.NotNull;
-
 import java.util.ArrayList;
-import java.util.Optional;
 
 public class SpawnInitData extends SavedData
 {
@@ -39,6 +37,7 @@ public class SpawnInitData extends SavedData
         UNKNOWN_LOADING_ERROR
     }
 
+    public boolean m_Initialized = false;
     public VillageSpawnPointState m_State = VillageSpawnPointState.NOT_STARTED;
     public BlockPos m_VillageSpawnPos = BlockPos.ZERO;
     public Boolean m_SentFailureMessage = false;
@@ -46,19 +45,20 @@ public class SpawnInitData extends SavedData
     public ArrayList<Block> m_BlockWhitelist = new ArrayList<Block>();
     public BlockPos m_VillagePos = BlockPos.ZERO;
     public String m_VillageID = "";
+    public static String SAVE_DATA_ID = "bettervillagespawnpoint_spawn_data";
 
     public SpawnInitData()
     {
         // Default constructor
     }
 
-    public static SpawnInitData load(CompoundTag tag)
-    {
+    public static SpawnInitData load(CompoundTag tag) {
+        Constants.LOG.info("[Better Village Spawn Point] Spawn data loaded.");
         SpawnInitData data = new SpawnInitData();
-        data.m_State = VillageSpawnPointState.valueOf(String.valueOf(tag.getString("VillageSpawnPointState")));
+        data.m_State = VillageSpawnPointState.valueOf(tag.getString("VillageSpawnPointState"));
         data.m_VillageSpawnPos = new BlockPos(tag.getInt("VillageSpawnPosX"), tag.getInt("VillageSpawnPosY"), tag.getInt("VillageSpawnPosZ"));
         data.m_VillagePos = new BlockPos(tag.getInt("VillagePosX"), tag.getInt("VillagePosY"), tag.getInt("VillagePosZ"));
-        data.m_VillageID = String.valueOf(tag.getString("VillageID"));
+        data.m_VillageID = tag.getString("VillageID");
         data.m_SentFailureMessage = tag.getBoolean("VillageSpawnFailureMessageSent");
         data.m_FailureReason = VillageSpawnPointFailureReason.valueOf(tag.getString("VillageSpawnFailureReason"));
 
@@ -69,11 +69,11 @@ public class SpawnInitData extends SavedData
             for (int i = 0; i < blockListTag.size(); i++) {
                 String blockIdString = blockListTag.getString(i);
                 ResourceLocation blockId = ResourceLocation.tryParse(blockIdString);
-                if( blockId == null )
-                    continue;
-
                 Block block = BuiltInRegistries.BLOCK.get(blockId);
-                data.m_BlockWhitelist.add(block);
+
+                if (block != Blocks.AIR) { // Ensure it's valid
+                    data.m_BlockWhitelist.add(block);
+                }
             }
         }
         return data;
@@ -102,9 +102,20 @@ public class SpawnInitData extends SavedData
         return tag;
     }
 
-    public static SpawnInitData get( ServerLevel level)
+    public static void save(ServerLevel level)
     {
-        return level.getDataStorage().computeIfAbsent(
-                new SavedData.Factory<>(SpawnInitData::new, SpawnInitData::load, DataFixTypes.LEVEL), "bettervillagespawnpoint_spawn_data");
+        level.getServer().executeBlocking(() ->
+        {
+            SpawnInitData data = get(level);
+            data.setDirty();
+
+            level.getDataStorage().save();
+            //level.getServer().saveEverything(false, /*flush*/ true, /*force*/ true);
+        });
+    }
+
+    public static SpawnInitData get(ServerLevel level)
+    {
+        return level.getDataStorage().computeIfAbsent(new SavedData.Factory<>(SpawnInitData::new, SpawnInitData::load, DataFixTypes.LEVEL), "bettervillagespawnpoint_spawn_data");
     }
 }
