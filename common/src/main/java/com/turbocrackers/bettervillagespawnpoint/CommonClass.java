@@ -1,13 +1,10 @@
 package com.turbocrackers.bettervillagespawnpoint;
 
-import com.turbocrackers.bettervillagespawnpoint.platform.Services;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
 import com.turbocrackers.bettervillagespawnpoint.util.VillageLocator;
 import net.minecraft.ChatFormatting;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.item.Items;
 
 import java.util.Objects;
 
