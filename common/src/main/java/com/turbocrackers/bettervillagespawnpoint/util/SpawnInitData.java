@@ -2,7 +2,7 @@ package com.turbocrackers.bettervillagespawnpoint.util;
 
 import com.turbocrackers.bettervillagespawnpoint.Constants;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
@@ -62,7 +62,7 @@ public class SpawnInitData extends SavedData
             for (int i = 0; i < blockListTag.size(); i++) {
                 String blockIdString = blockListTag.getString(i);
                 ResourceLocation blockId = ResourceLocation.tryParse(blockIdString);
-                Block block = BuiltInRegistries.BLOCK.get(blockId);
+                Block block = Registry.BLOCK.get(blockId);
 
                 if (block != Blocks.AIR) { // Ensure it's valid
                     data.m_BlockWhitelist.add(block);
@@ -88,11 +88,8 @@ public class SpawnInitData extends SavedData
         ListTag listTag = new ListTag();
         for (Block block : m_BlockWhitelist)
         {
-            ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(block);
-            if( blockId != null )
-            {
-                listTag.add(StringTag.valueOf(blockId.toString()));
-            }
+            ResourceLocation blockId = Registry.BLOCK.getKey(block);
+            listTag.add(StringTag.valueOf(blockId.toString()));
         }
         tag.put("BlockWhitelist", listTag);
         return tag;
