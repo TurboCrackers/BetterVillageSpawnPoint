@@ -133,4 +133,13 @@ public class SpawnInitData extends SavedData
         tag.put("BlockWhitelist", listTag);
         return tag;
     }
+
+    public void save( ServerLevel level )
+    {
+        level.getServer().executeBlocking( () ->
+        {
+            setDirty();
+            level.getDataStorage().saveAndJoin();
+        });
+    }
 }
