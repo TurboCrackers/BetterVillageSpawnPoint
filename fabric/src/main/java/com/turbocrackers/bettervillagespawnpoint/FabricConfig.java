@@ -16,6 +16,15 @@ public class FabricConfig extends CommonConfig implements ConfigData
     // Same input used for the /locate structure command.
 
     @ConfigEntry.Gui.Tooltip
+    public List<String> exclusions = List.of();
+    // Tooltip: Blacklist. Structures that must never be used as the spawn point, even if
+    // villageTags (or the vanilla fallback) would otherwise pick them. Each entry can be
+    // an exact ID (minecraft:village_snowy), a tag (#minecraft:village, which excludes
+    // every structure in that tag), or a wildcard pattern (idas:*, *:village_snowy*).
+    // Example: villageTags = [ "#minecraft:village" ]
+    //          exclusions  = [ "minecraft:village_snowy", "idas:*" ]
+
+    @ConfigEntry.Gui.Tooltip
     public boolean useMinecraftVillagesAsFallback = true;
     // Tooltip: If true, vanilla Minecraft villages will be used as fallback
     // when no custom village tags match.
@@ -34,5 +43,9 @@ public class FabricConfig extends CommonConfig implements ConfigData
 
     public List<String> GetStructureList() {
         return villageTags;
+    }
+
+    public List<String> GetExclusionsList() {
+        return exclusions;
     }
 }
