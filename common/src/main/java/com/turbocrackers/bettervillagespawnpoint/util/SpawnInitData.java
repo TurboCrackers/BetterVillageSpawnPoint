@@ -36,6 +36,13 @@ public class SpawnInitData extends SavedData
         UNKNOWN_LOADING_ERROR
     }
 
+    /**
+     * "No position recorded". Deliberately NOT BlockPos.ZERO: the spawn mixins decide whether to
+     * take over by comparing the level's shared spawn against ours, and a world whose spawn really
+     * is 0,0,0 would collide with a ZERO sentinel. A y of Integer.MIN_VALUE cannot be a real spawn.
+     */
+    public static final BlockPos NO_POS = new BlockPos(0, Integer.MIN_VALUE, 0);
+
     public boolean m_Initialized = false;
     public VillageSpawnPointState m_State = VillageSpawnPointState.NOT_STARTED;
     public BlockPos m_VillageSpawnPos = BlockPos.ZERO;
