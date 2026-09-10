@@ -42,14 +42,21 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Pattern;
 
 public class VillageLocator
 {
-    private BlockPos m_VillageSpawnPos = BlockPos.ZERO;
+    private BlockPos m_VillageSpawnPos = SpawnInitData.NO_POS;
     private SpawnInitData.VillageSpawnPointState m_VillageSpawnPointGenerationState = SpawnInitData.VillageSpawnPointState.NOT_STARTED;
-    public static SpawnInitData.VillageSpawnPointFailureReason m_VillageSpawnPointFailureReason = SpawnInitData.VillageSpawnPointFailureReason.NONE;
+    private SpawnInitData.VillageSpawnPointFailureReason m_VillageSpawnPointFailureReason = SpawnInitData.VillageSpawnPointFailureReason.NONE;
+
+    public SpawnInitData.VillageSpawnPointFailureReason GetFailureReason()
+    {
+        return m_VillageSpawnPointFailureReason;
+    }
     private ArrayList<Block> m_BlockWhitelist = new ArrayList<>();
-    private BlockPos m_VillagePos = BlockPos.ZERO;
+    private BlockPos m_VillagePos = SpawnInitData.NO_POS;
     private String m_VillageID = "";
     private final BlockDebugger m_BlockDebugger = new BlockDebugger();
 
@@ -615,8 +622,8 @@ public class VillageLocator
     {
         CommonClass.NEEDS_ERROR_MESSAGE = true;
         Constants.LOG.error("[Better Village Spawn Point] Failed to find a spawn point for village. Failure reason: {}", failure_reason);
-        m_VillageSpawnPos = BlockPos.ZERO;
-        m_VillagePos = BlockPos.ZERO;
+        m_VillageSpawnPos = SpawnInitData.NO_POS;
+        m_VillagePos = SpawnInitData.NO_POS;
         m_VillageID = "";
         m_VillageSpawnPointGenerationState = SpawnInitData.VillageSpawnPointState.FAILURE;
         m_VillageSpawnPointFailureReason = failure_reason;
@@ -647,10 +654,41 @@ public class VillageLocator
         return y_positive_count > 2;
     }
 
+    // True while a village search is running on the server thread. The search generates chunks
+    // synchronously, and chunk generation can call back into anything that asks for the world
+    // spawn (our own spawn mixins included, and other village mods do it too). If one of those
+    // ever re-entered the search it would recurse on the server thread and freeze the client
+    // with no crash to point at.
+    private boolean m_SearchInProgress = false;
+
     public void FindVillageAndSpawn(MinecraftServer server)
+    {
+        if( m_SearchInProgress )
+        {
+            Constants.LOG.warn("[Better Village Spawn Point] Village search was re-entered while already running; ignoring the nested call.");
+            return;
+        }
+
+        m_SearchInProgress = true;
+        try
+        {
+            FindVillageAndSpawnInternal(server);
+        }
+        finally
+        {
+            m_SearchInProgress = false;
+        }
+    }
+
+    private void FindVillageAndSpawnInternal(MinecraftServer server)
     {
         // Grab our level and make sure the dimension is valid.
         ServerLevel level = server.getLevel(Level.OVERWORLD);
+        if( level == null )
+        {
+            Constants.LOG.error("[Better Village Spawn Point] There is no overworld on this server, so there is nowhere to place a village spawn. Skipping.");
+            return;
+        }
 
         // Only set the spawn point once
         SpawnInitData data = SpawnInitData.get(level);
@@ -661,7 +699,13 @@ public class VillageLocator
             Constants.LOG.info("[Better Village Spawn Point] Spawn data state is {}.", m_VillageSpawnPointGenerationState.toString());
             if (data.m_State == SpawnInitData.VillageSpawnPointState.SUCCESS)
             {
+                // Restore the FULL record. m_VillagePos and m_VillageID were previously left at
+                // their defaults here, so after a restart RefreshSpawnPos would re-find a spawn
+                // using an empty village id, fail to resolve the structure, and permanently mark
+                // the world FAILURE the first time the recorded spawn block stopped being valid.
                 m_VillageSpawnPos = data.m_VillageSpawnPos;
+                m_VillagePos = data.m_VillagePos;
+                m_VillageID = data.m_VillageID;
                 m_BlockWhitelist = data.m_BlockWhitelist;
             }
             else
@@ -690,7 +734,19 @@ public class VillageLocator
             {
                 TagKey<Structure> tagKey = TagKey.create(Registries.STRUCTURE, ResourceLocation.tryParse(config_entry.substring(1)));
                 structureLookup.get(tagKey).ifPresentOrElse(
-                        holders -> holders.forEach(village_holders::add),
+                        holders -> holders.forEach(holder ->
+                        {
+                            // A tag is a bulk include, so everything it drags in still has to clear
+                            // the blacklist and still has to be capable of generating in this world.
+                            if( IsExcluded(holder) )
+                                return;
+
+                            Optional<ResourceKey<Structure>> holder_key = holder.unwrapKey();
+                            if( holder_key.isPresent() && !WillVillageIdEverGenerate(level, holder_key.get().location()) )
+                                return;
+
+                            village_holders.add(holder);
+                        }),
                         () -> Constants.LOG.warn("[Better Village Spawn Point] Structure tag '{}' not found in registry! Skipping.", config_entry)
                                                            );
                 continue;
@@ -711,9 +767,14 @@ public class VillageLocator
                     continue;
                 }
 
+                if( IsExcluded(structure_holder.get()) )
+                {
+                    continue;
+                }
+
                 if( !WillVillageIdEverGenerate( level, resource_location ))
                 {
-                    Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' won't ever generate!", config_entry);
+                    Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' won't ever generate in this world (no structure set places it here, no biome here can host it, or structure generation is off). Skipping.", config_entry);
                     continue;
                 }
 
@@ -721,7 +782,16 @@ public class VillageLocator
             }
         }
 
-        if( !FindNearestVillageAndSpawn(level, HolderSet.direct(village_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false) )
+        // If every configured entry was rejected there is nothing to look for, and running the
+        // search anyway just burns a full-radius chunk scan to rediscover that. Say so plainly --
+        // this is the case people hit on superflat worlds, where a modded structure is configured
+        // but no structure set or biome in the world can ever place it.
+        if( village_holders.isEmpty() )
+        {
+            Constants.LOG.warn("[Better Village Spawn Point] None of the configured villageTags entries ({}) can generate in this world. Nothing to search for.", structure_ids);
+        }
+
+        if( village_holders.isEmpty() || !FindNearestVillageAndSpawn(level, HolderSet.direct(village_holders), BlockPos.ZERO, CommonClass.m_Config.GetSearchRadius(), false) )
         {
             if( !CommonClass.m_Config.UseVanillaFallback() )
             {
@@ -737,9 +807,22 @@ public class VillageLocator
                 {
                     if( WillVillageIdEverGenerate(level, structure.left().get().location() ) )
                     {
+                        // The blacklist applies to the fallback too, otherwise excluding a village
+                        // just hands it back the moment the primary search comes up empty.
+                        if( IsExcluded(holder) )
+                            continue;
+
                         vanilla_holders.add(holder);
                     }
                 }
+            }
+
+            // Same short-circuit for the fallback: with nothing placeable, the scan can only fail.
+            if( vanilla_holders.isEmpty() )
+            {
+                Constants.LOG.warn("[Better Village Spawn Point] No vanilla village can generate in this world either, so the fallback has nothing to search for.");
+                OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
+                return;
             }
 
             ChunkGenerator chunkGenerator = level.getChunkSource().getGenerator();
@@ -769,6 +852,92 @@ public class VillageLocator
 
             OnFailedToGenerateSpawnPos(level, SpawnInitData.VillageSpawnPointFailureReason.VANILLA_FALLBACK_FAILED);
         }
+    }
+
+    /**
+     * The "exclusions" config list is a blacklist applied to everything villageTags expands to
+     * AND to the vanilla-village fallback. Each entry can be:
+     *   - an exact structure id:  minecraft:village_snowy
+     *   - a structure tag:        #minecraft:village   (excludes every structure in the tag)
+     *   - a wildcard pattern:     idas:*  or  *:village_*   ('*' matches any run of characters)
+     */
+    public Boolean IsExcluded( String village_id )
+    {
+        for( String exclusion_entry : CommonClass.m_Config.GetExclusionsList() )
+        {
+            String entry = exclusion_entry.trim();
+            if( entry.isEmpty() )
+                continue;
+
+            boolean matches;
+            if( entry.startsWith("#") )
+                matches = village_id.equals(entry); // only matches a raw config entry that IS this tag
+            else if( entry.contains("*") )
+                matches = GlobToPattern(entry).matcher(village_id).matches();
+            else
+                matches = village_id.equals(entry);
+
+            if( matches )
+            {
+                Constants.LOG.info("[Better Village Spawn Point] '{}' was excluded by '{}'", village_id, entry);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Holder-aware overload. Does everything the String version does, and additionally honours
+     * '#tag' entries by asking the structure whether it is a member of that tag -- which is the
+     * only way to blacklist a whole tag's worth of structures that villageTags pulled in.
+     */
+    public Boolean IsExcluded( Holder<Structure> structure )
+    {
+        Optional<ResourceKey<Structure>> key = structure.unwrapKey();
+        if( key.isEmpty() )
+            return false;
+
+        String id = key.get().location().toString();
+        if( IsExcluded(id) )
+            return true;
+
+        for( String exclusion_entry : CommonClass.m_Config.GetExclusionsList() )
+        {
+            String entry = exclusion_entry.trim();
+            if( !entry.startsWith("#") )
+                continue;
+
+            ResourceLocation tag_id = ResourceLocation.tryParse(entry.substring(1));
+            if( tag_id == null )
+            {
+                Constants.LOG.warn("[Better Village Spawn Point] Exclusion '{}' is not a valid tag. Ignoring.", entry);
+                continue;
+            }
+
+            if( structure.is(TagKey.create(Registries.STRUCTURE, tag_id)) )
+            {
+                Constants.LOG.info("[Better Village Spawn Point] '{}' was excluded by tag '{}'", id, entry);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static final Map<String, Pattern> GLOB_CACHE = new ConcurrentHashMap<>();
+
+    private static Pattern GlobToPattern( String glob )
+    {
+        return GLOB_CACHE.computeIfAbsent(glob, g ->
+        {
+            StringBuilder regex = new StringBuilder();
+            for( String part : g.split("\\*", -1) )
+            {
+                if( regex.length() > 0 )
+                    regex.append(".*");
+                regex.append(Pattern.quote(part));
+            }
+            return Pattern.compile(regex.toString());
+        });
     }
 
     Boolean WillVillageIdEverGenerate( ServerLevel level, ResourceLocation resource_location )
