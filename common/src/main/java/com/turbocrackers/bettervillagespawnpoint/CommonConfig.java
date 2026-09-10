@@ -18,4 +18,9 @@ public class CommonConfig
     {
         throw new UnsupportedOperationException("CommonConfig.GetStructureList needs to be implemented in child class.");
     }
+
+    public List<? extends String> GetExclusionsList()
+    {
+        throw new UnsupportedOperationException("CommonConfig.GetExclusionsList needs to be implemented in child class.");
+    }
 }
