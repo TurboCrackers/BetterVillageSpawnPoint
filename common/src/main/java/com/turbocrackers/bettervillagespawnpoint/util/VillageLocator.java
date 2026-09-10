@@ -34,15 +34,21 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 public class VillageLocator
 {
-    private BlockPos m_VillageSpawnPos = BlockPos.ZERO;
+    private BlockPos m_VillageSpawnPos = SpawnInitData.NO_POS;
     private SpawnInitData.VillageSpawnPointState m_VillageSpawnPointGenerationState = SpawnInitData.VillageSpawnPointState.NOT_STARTED;
-    public static SpawnInitData.VillageSpawnPointFailureReason m_VillageSpawnPointFailureReason = SpawnInitData.VillageSpawnPointFailureReason.NONE;
+    private SpawnInitData.VillageSpawnPointFailureReason m_VillageSpawnPointFailureReason = SpawnInitData.VillageSpawnPointFailureReason.NONE;
+
+    public SpawnInitData.VillageSpawnPointFailureReason GetFailureReason()
+    {
+        return m_VillageSpawnPointFailureReason;
+    }
     private ArrayList<Block> m_BlockWhitelist = new ArrayList<>();
-    private BlockPos m_VillagePos = BlockPos.ZERO;
+    private BlockPos m_VillagePos = SpawnInitData.NO_POS;
     private String m_VillageID = "";
     private final BlockDebugger m_BlockDebugger = new BlockDebugger();
 
@@ -608,8 +614,8 @@ public class VillageLocator
     {
         CommonClass.NEEDS_ERROR_MESSAGE = true;
         Constants.LOG.error("[Better Village Spawn Point] Failed to find a spawn point for village. Failure reason: {}", failure_reason);
-        m_VillageSpawnPos = BlockPos.ZERO;
-        m_VillagePos = BlockPos.ZERO;
+        m_VillageSpawnPos = SpawnInitData.NO_POS;
+        m_VillagePos = SpawnInitData.NO_POS;
         m_VillageID = "";
         m_VillageSpawnPointGenerationState = SpawnInitData.VillageSpawnPointState.FAILURE;
         m_VillageSpawnPointFailureReason = failure_reason;
@@ -670,6 +676,11 @@ public class VillageLocator
     {
         // Grab our level and make sure the dimension is valid.
         ServerLevel level = server.getLevel(Level.OVERWORLD);
+        if( level == null )
+        {
+            Constants.LOG.error("[Better Village Spawn Point] There is no overworld on this server, so there is nowhere to place a village spawn. Skipping.");
+            return;
+        }
 
         // Only set the spawn point once
         SpawnInitData data = SpawnInitData.get(level);
@@ -680,7 +691,13 @@ public class VillageLocator
             Constants.LOG.info("[Better Village Spawn Point] Spawn data state is {}.", m_VillageSpawnPointGenerationState.toString());
             if (data.m_State == SpawnInitData.VillageSpawnPointState.SUCCESS)
             {
+                // Restore the FULL record. m_VillagePos and m_VillageID were previously left at
+                // their defaults here, so after a restart RefreshSpawnPos would re-find a spawn
+                // using an empty village id, fail to resolve the structure, and permanently mark
+                // the world FAILURE the first time the recorded spawn block stopped being valid.
                 m_VillageSpawnPos = data.m_VillageSpawnPos;
+                m_VillagePos = data.m_VillagePos;
+                m_VillageID = data.m_VillageID;
                 m_BlockWhitelist = data.m_BlockWhitelist;
             }
             else
@@ -898,7 +915,7 @@ public class VillageLocator
         return false;
     }
 
-    private static final Map<String, Pattern> GLOB_CACHE = new HashMap<>();
+    private static final Map<String, Pattern> GLOB_CACHE = new ConcurrentHashMap<>();
 
     private static Pattern GlobToPattern( String glob )
     {
