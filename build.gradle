@@ -15,12 +15,16 @@ repositories {
 // -------------- TESTING SUITE -------------- //
 ext {
     def userHome  = System.getProperty('user.home')
-    def isWindows = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('win')
+    def osName    = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+    def isWindows = osName.contains('win')
+    def isMac     = osName.contains('mac')
 
-    // Override per machine with -PprismRoot=/path -PprismExe=/path, or the
-    // PRISM_ROOT / PRISM_CLI environment variables. Hardcoding a single OS's paths
-    // here breaks configuration on the others (Gradle can't turn "C:/..." into a file).
-    prismRoot = "/Users/tubbycakes/Documents/PrismLauncher"
+    def defaultPrismRoot =
+            isWindows ? "${System.getenv('APPDATA')}/PrismLauncher" :
+                    isMac     ? "${userHome}/Library/Application Support/PrismLauncher" :
+                            "${userHome}/.local/share/PrismLauncher"
+
+    prismRoot = findProperty('prismRoot') ?: System.getenv('PRISM_ROOT') ?: defaultPrismRoot
 
     // Path to Prism/MultiMC CLI executable
     prismExe = (findProperty('prismExe') ?: System.getenv('PRISM_CLI') ?: (isWindows
@@ -33,9 +37,32 @@ ext {
     instNameNeo    = "${minecraft_version}-NeoForge"
 
     // Where those instances live (open instance folder in Prism to confirm)
-    instFabricMods = "${prismRoot}/instances/${instNameFabric}/minecraft/mods"
-    instForgeMods  = "${prismRoot}/instances/${instNameForge}/minecraft/mods"
-    instNeoMods    = "${prismRoot}/instances/${instNameNeo}/minecraft/mods"
+    instFabricMods = "${prismRoot}/instances/${instNameFabric}/.minecraft/mods"
+    instForgeMods  = "${prismRoot}/instances/${instNameForge}/.minecraft/mods"
+    instNeoMods    = "${prismRoot}/instances/${instNameNeo}/.minecraft/mods"
+}
+
+// A Copy task will happily mkdir -p whatever you point `into()` at, so a wrong
+// prismRoot deploys "successfully" into an empty tree that Minecraft never reads.
+// Verify the mods folder is really there before copying.
+def requireInstanceMods = { String path, String instName ->
+    def dir = file(path)
+    if (!dir.isDirectory()) {
+        throw new GradleException(
+                "Prism instance mods folder not found:\n  ${dir}\n" +
+                "Instance '${instName}' does not exist under prismRoot=${prismRoot}.\n" +
+                "Set the right one with -PprismRoot=/path/to/PrismLauncher, the PRISM_ROOT\n" +
+                "environment variable, or prismRoot=... in ~/.gradle/gradle.properties.")
+    }
+}
+
+// Remove EVERY previously deployed build of this mod, not just the filename we are
+// about to write. Otherwise bumping `version` (or minecraft_version) leaves the old
+// jar behind and the loader sees two mods claiming the same mod id.
+def purgeOldDeploys = { String path ->
+    def stale = fileTree(path) { include "${mod_id}-*.jar" }.files
+    stale.each { logger.lifecycle("Removing stale deploy: ${it.name}") }
+    delete stale
 }
 
 // ---------- FABRIC ----------
@@ -49,8 +76,12 @@ tasks.register("deployFabricToInstance", Copy) {
     into(file(instFabricMods))
     rename { _ -> "${mod_id}-fabric-${minecraft_version}-${version}.jar" }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    // Copying 44 KB is free; being skipped as UP-TO-DATE is not, because it
+    // would skip doFirst and leave orphaned jars from older versions in place.
+    outputs.upToDateWhen { false }
     doFirst {
-        delete fileTree(instFabricMods) { include "${mod_id}-fabric-${minecraft_version}-${version}.jar" }
+        requireInstanceMods(instFabricMods, instNameFabric)
+        purgeOldDeploys(instFabricMods)
     }
 }
 
@@ -75,8 +106,12 @@ tasks.register("deployForgeToInstance", Copy) {
     into(file(instForgeMods))
     rename { _ -> "${mod_id}-forge-${minecraft_version}-${version}.jar" }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    // Copying 44 KB is free; being skipped as UP-TO-DATE is not, because it
+    // would skip doFirst and leave orphaned jars from older versions in place.
+    outputs.upToDateWhen { false }
     doFirst {
-        delete fileTree(instForgeMods) { include "${mod_id}-forge-${minecraft_version}-${version}.jar" }
+        requireInstanceMods(instForgeMods, instNameForge)
+        purgeOldDeploys(instForgeMods)
     }
 }
 
@@ -99,8 +134,12 @@ tasks.register("deployNeoToInstance", Copy) {
     into(file(instNeoMods))
     rename { _ -> "${mod_id}-neoforge-${minecraft_version}-${version}.jar" }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    // Copying 44 KB is free; being skipped as UP-TO-DATE is not, because it
+    // would skip doFirst and leave orphaned jars from older versions in place.
+    outputs.upToDateWhen { false }
     doFirst {
-        delete fileTree(instNeoMods) { include "${mod_id}-neoforge-${minecraft_version}-${version}.jar" }
+        requireInstanceMods(instNeoMods, instNameNeo)
+        purgeOldDeploys(instNeoMods)
     }
 }
 
