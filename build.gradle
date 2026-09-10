@@ -14,18 +14,28 @@ repositories {
 
 // -------------- TESTING SUITE -------------- //
 ext {
+    def userHome  = System.getProperty('user.home')
+    def isWindows = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('win')
+
+    // Override per machine with -PprismRoot=/path -PprismExe=/path, or the
+    // PRISM_ROOT / PRISM_CLI environment variables. Hardcoding a single OS's paths
+    // here breaks configuration on the others (Gradle can't turn "C:/..." into a file).
+    prismRoot = "/Users/tubbycakes/Documents/PrismLauncher"
+
     // Path to Prism/MultiMC CLI executable
-    prismExe = System.getenv("PRISM_CLI") ?: "C:/Users/laura/AppData/Local/Programs/PrismLauncher/prismlauncher.exe"
+    prismExe = (findProperty('prismExe') ?: System.getenv('PRISM_CLI') ?: (isWindows
+            ? "${userHome}/AppData/Local/Programs/PrismLauncher/prismlauncher.exe"
+            : "/Applications/Prism Launcher.app/Contents/MacOS/prismlauncher")).toString()
 
-    // Where those instances live (open instance folder in Prism to confirm)
-    instFabricMods = "C:/Users/laura/AppData/Roaming/PrismLauncher/instances/${minecraft_version}-Fabric/minecraft/mods"
-    instForgeMods  = "C:/Users/laura/AppData/Roaming/PrismLauncher/instances/${minecraft_version}-Forge/minecraft/mods"
-    instNeoMods    = "C:/Users/laura/AppData/Roaming/PrismLauncher/instances/${minecraft_version}-NeoForge/minecraft/mods"
-
-    // Instance names as shown in Prism’s UI
+    // Instance names as shown in Prism's UI
     instNameFabric = "${minecraft_version}-Fabric"
     instNameForge  = "${minecraft_version}-Forge"
     instNameNeo    = "${minecraft_version}-NeoForge"
+
+    // Where those instances live (open instance folder in Prism to confirm)
+    instFabricMods = "${prismRoot}/instances/${instNameFabric}/minecraft/mods"
+    instForgeMods  = "${prismRoot}/instances/${instNameForge}/minecraft/mods"
+    instNeoMods    = "${prismRoot}/instances/${instNameNeo}/minecraft/mods"
 }
 
 // ---------- FABRIC ----------
@@ -35,11 +45,13 @@ tasks.register("buildFabricRelease") {
 
 tasks.register("deployFabricToInstance", Copy) {
     dependsOn("buildFabricRelease")
-    delete fileTree(instFabricMods) { include "${mod_id}-fabric-${minecraft_version}-${version}.jar" }
     from(project(":fabric").tasks.named("remapJar"))
     into(file(instFabricMods))
     rename { _ -> "${mod_id}-fabric-${minecraft_version}-${version}.jar" }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    doFirst {
+        delete fileTree(instFabricMods) { include "${mod_id}-fabric-${minecraft_version}-${version}.jar" }
+    }
 }
 
 tasks.register("runFabricObf", Exec) {
@@ -55,8 +67,7 @@ tasks.register("buildForgeRelease") {
 
 tasks.register("deployForgeToInstance", Copy) {
     dependsOn("buildForgeRelease")
-    delete fileTree(instForgeMods) { include "${mod_id}-forge-${minecraft_version}-${version}.jar" }
-    from(fileTree("${project(":forge").buildDir}/libs") {
+    from(fileTree(rootProject.file("forge/build/libs")) {
         include("*.jar")
         // If you have multiple jars (sources, dev), pick your classifier:
         exclude("*-sources.jar", "*-dev.jar")
@@ -64,6 +75,9 @@ tasks.register("deployForgeToInstance", Copy) {
     into(file(instForgeMods))
     rename { _ -> "${mod_id}-forge-${minecraft_version}-${version}.jar" }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    doFirst {
+        delete fileTree(instForgeMods) { include "${mod_id}-forge-${minecraft_version}-${version}.jar" }
+    }
 }
 
 tasks.register("runForgeObf", Exec) {
@@ -78,14 +92,16 @@ tasks.register("buildNeoRelease") {
 
 tasks.register("deployNeoToInstance", Copy) {
     dependsOn("buildNeoRelease")
-    delete fileTree(instNeoMods) { include "${mod_id}-neoforge-${minecraft_version}-${version}.jar" }
-    from(fileTree("${project(":neoforge").buildDir}/libs") {
+    from(fileTree(rootProject.file("neoforge/build/libs")) {
         include("*.jar")
         exclude("*-sources.jar", "*-dev.jar")
     })
     into(file(instNeoMods))
     rename { _ -> "${mod_id}-neoforge-${minecraft_version}-${version}.jar" }
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
+    doFirst {
+        delete fileTree(instNeoMods) { include "${mod_id}-neoforge-${minecraft_version}-${version}.jar" }
+    }
 }
 
 tasks.register("runNeoObf", Exec) {
