@@ -31,7 +31,7 @@ public class CommonClass
         Objects.requireNonNull(player.getServer()).execute(() -> {
             if (NEEDS_ERROR_MESSAGE)
             {
-                switch( VillageLocator.m_VillageSpawnPointFailureReason )
+                switch( m_VillageLocator.GetFailureReason() )
                 {
                     case VANILLA_FALLBACK_FAILED:
                     {
@@ -41,7 +41,7 @@ public class CommonClass
 
                     default:
                     {
-                        player.sendSystemMessage( Component.literal("[Better Village Spawn Point] Village search failed. Failure reason: " + VillageLocator.m_VillageSpawnPointFailureReason).withStyle(ChatFormatting.RED));
+                        player.sendSystemMessage( Component.literal("[Better Village Spawn Point] Village search failed. Failure reason: " + m_VillageLocator.GetFailureReason()).withStyle(ChatFormatting.RED));
                         break;
                     }
                 }
