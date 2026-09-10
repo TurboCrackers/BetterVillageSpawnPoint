@@ -11,6 +11,7 @@ public class NeoForgeConfig extends CommonConfig
     private static final ModConfigSpec.Builder BUILDER = new ModConfigSpec.Builder();
     private static final ModConfigSpec CONFIG;
     private static final ModConfigSpec.ConfigValue<List<? extends String>> STRUCTURE_IDS;
+    private static final ModConfigSpec.ConfigValue<List<? extends String>> EXCLUSION_IDS;
     private static final ModConfigSpec.ConfigValue<Boolean> USE_MINECRAFT_VILLAGE_FALLBACK;
     private static final ModConfigSpec.ConfigValue<Integer> SEARCH_RADIUS;
 
@@ -23,6 +24,19 @@ public class NeoForgeConfig extends CommonConfig
                         List.of(
                                 "#minecraft:village"
                                ),
+                        o -> o instanceof String
+                           );
+
+        EXCLUSION_IDS = BUILDER
+                .comment("\nBlacklist: structures that must never be used as the spawn point, even if villageTags (or the vanilla fallback) would otherwise pick them.\n" +
+                         "Each entry can be an exact ID (minecraft:village_snowy), a tag (#minecraft:village, which excludes every structure in that tag),\n" +
+                         "or a wildcard pattern (idas:*, *:village_snowy*).\n" +
+                         "Example: villageTags = [ \"#minecraft:village\" ]\n" +
+                         "         exclusions  = [ \"minecraft:village_snowy\", \"idas:*\" ]\n" +
+                         "This also applies to the vanilla fallback if you are using it." )
+                .defineList(
+                        "exclusions",
+                        List.<String>of(),
                         o -> o instanceof String
                            );
 
@@ -47,4 +61,7 @@ public class NeoForgeConfig extends CommonConfig
 
     @Override
     public List<? extends String> GetStructureList() { return STRUCTURE_IDS.get(); }
+
+    @Override
+    public List<? extends String> GetExclusionsList() { return EXCLUSION_IDS.get(); }
 }
