@@ -1,0 +1,158 @@
+// -------------- TESTING SUITE -------------- //
+//
+// Deploys built jars into local Prism Launcher instances so a release build can be
+// smoke-tested in a real client.
+//
+// This file is intentionally IDENTICAL on every release branch. Fix it once, copy it
+// forward -- do not hand-edit it per branch. Anything branch-specific belongs in
+// build.gradle instead.
+//
+// Per-machine configuration (never commit these):
+//   -PprismRoot=/path/to/PrismLauncher   or  PRISM_ROOT env var
+//   -PprismExe=/path/to/prismlauncher    or  PRISM_CLI  env var
+//   or prismRoot=... / prismExe=... in ~/.gradle/gradle.properties
+
+ext {
+    def userHome  = System.getProperty('user.home')
+    def osName    = System.getProperty('os.name').toLowerCase(Locale.ROOT)
+    def isWindows = osName.contains('win')
+    def isMac     = osName.contains('mac')
+
+    // Prism's default data directory per platform. Hardcoding one OS's path here
+    // breaks every other machine, and because Gradle resolves a non-absolute path
+    // relative to the project, a stray "C:/..." on macOS/Linux quietly creates a
+    // literal "C:" folder inside the repo instead of failing.
+    def defaultPrismRoot =
+            isWindows ? "${System.getenv('APPDATA')}/PrismLauncher" :
+            isMac     ? "${userHome}/Library/Application Support/PrismLauncher" :
+                        "${userHome}/.local/share/PrismLauncher"
+
+    def defaultPrismExe =
+            isWindows ? "${userHome}/AppData/Local/Programs/PrismLauncher/prismlauncher.exe" :
+            isMac     ? "/Applications/Prism Launcher.app/Contents/MacOS/prismlauncher" :
+                        "/usr/bin/prismlauncher"
+
+    prismRoot = (findProperty('prismRoot') ?: System.getenv('PRISM_ROOT') ?: defaultPrismRoot).toString()
+    prismExe  = (findProperty('prismExe')  ?: System.getenv('PRISM_CLI')  ?: defaultPrismExe).toString()
+
+    // Instance names as shown in Prism's UI
+    instNameFabric = "${minecraft_version}-Fabric"
+    instNameForge  = "${minecraft_version}-Forge"
+    instNameNeo    = "${minecraft_version}-NeoForge"
+
+    // Where those instances live (open the instance folder in Prism to confirm).
+    // Prism uses ".minecraft" inside the instance dir, not "minecraft".
+    instFabricMods = "${prismRoot}/instances/${instNameFabric}/.minecraft/mods"
+    instForgeMods  = "${prismRoot}/instances/${instNameForge}/.minecraft/mods"
+    instNeoMods    = "${prismRoot}/instances/${instNameNeo}/.minecraft/mods"
+}
+
+// A Copy task happily mkdir -p's whatever you point into() at, so a wrong prismRoot
+// "deploys successfully" into an empty tree the launcher never reads. Fail loudly.
+def requireInstanceMods = { String path, String instName ->
+    def dir = file(path)
+    if (!dir.isDirectory()) {
+        throw new GradleException(
+                "Prism instance mods folder not found:\n  ${dir}\n" +
+                "Instance '${instName}' does not exist under prismRoot=${prismRoot}.\n" +
+                "Point at the right one with -PprismRoot=/path/to/PrismLauncher, the\n" +
+                "PRISM_ROOT environment variable, or prismRoot=... in ~/.gradle/gradle.properties.")
+    }
+}
+
+// Remove EVERY previously deployed build of this mod, not just the filename we are
+// about to write. Otherwise bumping `version` (or minecraft_version) leaves the old
+// jar behind and the loader sees two mods claiming the same mod id.
+def purgeOldDeploys = { String path ->
+    def stale = fileTree(path) { include "${mod_id}-*.jar" }.files
+    stale.each { logger.lifecycle("Removing stale deploy: ${it.name}") }
+    delete stale
+}
+
+// Registers deploy<Loader>ToInstance + run<Loader>Obf for one loader, but only if that
+// subproject actually exists -- NeoForge predates nothing before 1.20.2, and older
+// branches have no :neoforge at all.
+def registerLoader = { Map spec ->
+    def name     = spec.name          // "Fabric" / "Forge" / "Neo"
+    def path     = spec.projectPath   // ":fabric" etc
+    def modsDir  = spec.modsDir
+    def instName = spec.instName
+
+    if (rootProject.findProject(path) == null) {
+        logger.info("Skipping ${name} deploy tasks: no ${path} subproject on this branch")
+        return
+    }
+
+    tasks.register("build${name}Release") {
+        dependsOn(spec.buildTask)
+    }
+
+    // Deliberately NOT a Copy task. Gradle creates a Copy's declared output directory
+    // before running its actions, which would silently manufacture the very directory
+    // requireInstanceMods exists to reject -- and would make the guard dead code. Doing
+    // the copy inside the action keeps the destination undeclared, so the guard runs
+    // first and a wrong prismRoot fails loudly instead of deploying into nowhere.
+    tasks.register("deploy${name}ToInstance") {
+        dependsOn("build${name}Release")
+        doLast {
+            requireInstanceMods(modsDir, instName)
+            purgeOldDeploys(modsDir)
+            copy {
+                from(spec.jarSource())
+                into(file(modsDir))
+                rename { _ -> spec.deployedName }
+                duplicatesStrategy = DuplicatesStrategy.INCLUDE
+            }
+            logger.lifecycle("Deployed ${spec.deployedName} -> ${modsDir}")
+        }
+    }
+
+    tasks.register("run${name}Obf", Exec) {
+        dependsOn("deploy${name}ToInstance")
+        commandLine prismExe, "--launch", instName
+    }
+}
+
+// Loom's remapJar is the obfuscated, distributable Fabric jar.
+registerLoader(
+        name: "Fabric", projectPath: ":fabric",
+        buildTask: ":fabric:remapJar",
+        jarSource: { project(":fabric").tasks.named("remapJar") },
+        modsDir: instFabricMods, instName: instNameFabric,
+        deployedName: "${mod_id}-fabric-${minecraft_version}-${version}.jar")
+
+// In FG 6+ reobf runs on build, so forge/build/libs already holds the obfuscated jar.
+registerLoader(
+        name: "Forge", projectPath: ":forge",
+        buildTask: ":forge:build",
+        jarSource: {
+            fileTree(rootProject.file("forge/build/libs")) {
+                include("*.jar")
+                exclude("*-sources.jar", "*-dev.jar", "*-javadoc.jar")
+            }
+        },
+        modsDir: instForgeMods, instName: instNameForge,
+        deployedName: "${mod_id}-forge-${minecraft_version}-${version}.jar")
+
+registerLoader(
+        name: "Neo", projectPath: ":neoforge",
+        buildTask: ":neoforge:build",
+        jarSource: {
+            fileTree(rootProject.file("neoforge/build/libs")) {
+                include("*.jar")
+                exclude("*-sources.jar", "*-dev.jar", "*-javadoc.jar")
+            }
+        },
+        modsDir: instNeoMods, instName: instNameNeo,
+        deployedName: "${mod_id}-neoforge-${minecraft_version}-${version}.jar")
+
+// ---------- Convenience ----------
+// Only wires up the loaders that exist on this branch.
+tasks.register("deployAllToInstance") {
+    dependsOn(tasks.matching { it.name ==~ /deploy(Fabric|Forge|Neo)ToInstance/ })
+}
+
+tasks.register("runAllObf") {
+    dependsOn(tasks.matching { it.name ==~ /run(Fabric|Forge|Neo)Obf/ })
+}
+
