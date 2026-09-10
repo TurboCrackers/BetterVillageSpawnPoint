@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# BetterVillageSpawnPoint dev hook: prep the toolchain per MC-version branch.
+# Installed in .git/hooks (local to this clone; not versioned). Re-install from
+# _xfer/dev-tools/post-checkout after a fresh clone. Args: $1 prevHEAD $2 newHEAD $3 flag(1=branch)
+[ "$3" = "1" ] || exit 0
+REPO="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+cd "$REPO" || exit 0
+BR="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+LOG="_xfer/dev-tools/logs"; mkdir -p "$LOG"
+
+# branch -> required Java major. 1.7.10/1.8.9/1.10.2/1.12.2 also use LWJGL 2 (no
+# arm64 macOS natives), so on Apple Silicon they need an x86_64 JDK 8 under Rosetta.
+case "$BR" in
+  1.7.10*|1.8.9*|1.10.2*|1.12.2*) JV=8; LWJGL2=1 ;;
+  1.16.5*|1.17.1*)                JV=17; LWJGL2=0 ;;
+  *)                              JV=21; LWJGL2=0 ;;
+esac
+
+# Return an x86_64-only JDK 8 home (for LWJGL 2 under Rosetta), or empty.
+find_x86_jdk8() {
+  local h a
+  for h in /Library/Java/JavaVirtualMachines/*/Contents/Home; do
+    [ -x "$h/bin/java" ] || continue
+    "$h/bin/java" -version 2>&1 | head -1 | grep -Eq '"(1\.8|8)\.' || continue
+    a="$(file "$h/bin/java" 2>/dev/null)"
+    echo "$a" | grep -q x86_64 && ! echo "$a" | grep -q arm64 && { echo "$h"; return 0; }
+  done
+  return 1
+}
+
+JHOME=""
+if [ "$LWJGL2" = "1" ] && [ "$(uname -m)" = "arm64" ]; then
+  JHOME="$(find_x86_jdk8)"
+  if [ -z "$JHOME" ]; then
+    echo "[bvsp] $BR uses LWJGL 2, which has no arm64 macOS natives."
+    echo "[bvsp] Install an Intel (x64) Temurin 8 .pkg + 'softwareupdate --install-rosetta', then re-checkout."
+    echo "[bvsp] See _xfer/dev-tools/README-DEV.md. Skipping auto-prep."
+    exit 0
+  fi
+  echo "[bvsp] $BR -> x86_64 JDK 8 (Rosetta): $JHOME"
+else
+  if [ -x /usr/libexec/java_home ]; then
+    JHOME="$(/usr/libexec/java_home -v "$JV" 2>/dev/null)"
+    [ -z "$JHOME" ] && JHOME="$(/usr/libexec/java_home -v "1.$JV" 2>/dev/null)"
+  fi
+  if [ -z "$JHOME" ]; then
+    echo "[bvsp] $BR needs JDK $JV, which isn't installed. In IntelliJ: Gradle JVM -> Download JDK ($JV). Skipping auto-prep."
+    exit 0
+  fi
+  echo "[bvsp] $BR -> JDK $JV ($JHOME)"
+fi
+
+# Pin Gradle's own JVM for this branch, kept out of git (skip-worktree) so the machine path never commits.
+PROP="gradle.properties"
+if [ -f "$PROP" ]; then grep -v '^org.gradle.java.home=' "$PROP" > "$PROP.__t" 2>/dev/null && mv "$PROP.__t" "$PROP"; fi
+printf 'org.gradle.java.home=%s\n' "$JHOME" >> "$PROP"
+git update-index --skip-worktree "$PROP" 2>/dev/null || true
+
+case "$BR" in
+  1.8.9*|1.10.2*|1.12.2*)
+    echo "[bvsp] preparing Minecraft workspace in the background (first time downloads+decompiles MC)..."
+    nohup env JAVA_HOME="$JHOME" ./gradlew --no-daemon setupDecompWorkspace > "$LOG/setup-$BR.log" 2>&1 &
+    echo "[bvsp] watch $LOG/setup-$BR.log ; hit Gradle sync in IntelliJ when it finishes."
+    ;;
+  1.7.10*)
+    echo "[bvsp] 1.7.10 uses ForgeGradle 1.2, whose Mojang download URL is dead."
+    echo "[bvsp] Pre-place the client jar per scripts/BUILDING-1.7.10.md, then run setupDecompWorkspace. Not auto-run."
+    ;;
+  *)
+    echo "[bvsp] $BR is a Loom branch; just hit Gradle sync in IntelliJ."
+    ;;
+esac
+exit 0
