@@ -17,7 +17,7 @@ public class ForgeConfig extends CommonConfig
     static
     {
         STRUCTURE_IDS = BUILDER
-                .comment("List of village IDs and/or tags to search for as spawn targets.\nExamples: #minecraft:village or minecraft:village_plains.\nThis is the same input that you would use for the /locate structure command\nTo find all of the village structure IDs/tags, open the game and type '/locate structure' and then scroll through the options to find structure IDs that you want. Use '/locate structure #' to find village tags.")
+                .comment("List of village tags and/or IDs to search for as spawn targets.\nExamples: #minecraft:village or minecraft:village_plains.\nThe leading '#' on a tag is optional: an entry that isn't a structure ID is tried as a tag.\nThis is the same input that you would use for the /locate structure command\nTo find all of the village structure IDs/tags, open the game and type '/locate structure' and then scroll through the options to find structure IDs that you want. Use '/locate structure #' to find village tags.")
                 .defineList(
                         "villageTags",
                         List.of(
@@ -28,10 +28,11 @@ public class ForgeConfig extends CommonConfig
 
         EXCLUSION_IDS = BUILDER
                 .comment("\nBlacklist: structures that must never be used as the spawn point, even if villageTags (or the vanilla fallback) would otherwise pick them.\n" +
-                         "Each entry can be an exact ID (minecraft:village_snowy), a tag (#minecraft:village, which excludes every structure in that tag),\n" +
-                         "or a wildcard pattern (idas:*, *:village_snowy*).\n" +
-                         "Example: villageTags = [ \"#minecraft:village\" ]\n" +
-                         "         exclusions  = [ \"minecraft:village_snowy\", \"idas:*\" ]\n" +
+                         "Uses the same format as villageTags. Each entry can be a tag (#minecraft:village, which excludes every structure in that tag),\n" +
+                         "an exact ID (minecraft:village_snowy), or a wildcard pattern (idas:*, *:village_snowy*).\n" +
+                         "The leading '#' on a tag is optional: an entry that isn't a structure ID is tried as a tag.\n" +
+                         "Example: villageTags = [ \"#minecraft:village\", \"#idas:village\" ]\n" +
+                         "         exclusions  = [ \"#idas:desert_village\", \"minecraft:village_snowy\", \"ctov:*\" ]\n" +
                          "This also applies to the vanilla fallback if you are using it." )
                 .defineList(
                         "exclusions",
