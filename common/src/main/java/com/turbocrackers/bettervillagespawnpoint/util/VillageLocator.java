@@ -714,64 +714,70 @@ public class VillageLocator
 
         // Populate the array of holders
         List<String> structure_ids = new ArrayList<>(CommonClass.m_Config.GetStructureList());
-        for (String config_entry : structure_ids)
+        for (String raw_entry : structure_ids)
         {
+            String config_entry = raw_entry.trim();
+            if (config_entry.isEmpty())
+                continue;
+
             if (config_entry.contains("underwater"))
             {
                 Constants.LOG.warn("[Better Village Spawn Point] '{}' is underwater. This mod doesn't support spawning in an underwater village! Skipping.", config_entry);
                 continue;
             }
 
-            if (config_entry.startsWith("#"))
+            // Same format as the exclusions list: '#namespace:name' is a structure tag and
+            // 'namespace:name' is a structure ID. The '#' is optional -- a bare entry that
+            // isn't a structure ID is tried as a tag before we give up on it.
+            boolean explicit_tag = config_entry.startsWith("#");
+            ResourceLocation resource_location = ResourceLocation.tryParse(explicit_tag ? config_entry.substring(1) : config_entry);
+            if (resource_location == null)
             {
-                TagKey<Structure> tagKey = TagKey.create(Registries.STRUCTURE, ResourceLocation.tryParse(config_entry.substring(1)));
-                structureLookup.get(tagKey).ifPresentOrElse(
-                        holders -> holders.forEach(holder ->
-                        {
-                            // A tag is a bulk include, so everything it drags in still has to clear
-                            // the blacklist and still has to be capable of generating in this world.
-                            if( IsExcluded(holder) )
-                                return;
-
-                            Optional<ResourceKey<Structure>> holder_key = holder.unwrapKey();
-                            if( holder_key.isPresent() && !WillVillageIdEverGenerate(level, holder_key.get().location()) )
-                                return;
-
-                            village_holders.add(holder);
-                        }),
-                        () -> Constants.LOG.warn("[Better Village Spawn Point] Structure tag '{}' not found in registry! Skipping.", config_entry)
-                                                           );
+                Constants.LOG.warn("[Better Village Spawn Point] '{}' is not a valid structure ID or tag! Skipping.", config_entry);
                 continue;
             }
-            else
-            {
-                ResourceLocation resource_location = ResourceLocation.tryParse(config_entry);
-                if (resource_location == null)
-                {
-                    Constants.LOG.warn("[Better Village Spawn Point] '{}' is not a valid structure! Skipping.", config_entry);
-                    continue;
-                }
 
+            if (!explicit_tag)
+            {
                 ResourceKey<Structure> key = ResourceKey.create(Registries.STRUCTURE, resource_location);
                 Optional<Holder.Reference<Structure>> structure_holder = structureLookup.get(key);
-                if (structure_holder.isEmpty()) {
-                    Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' not found in registry! Skipping.", config_entry);
-                    continue;
-                }
-
-                if( IsExcluded(structure_holder.get()) )
+                if (structure_holder.isPresent())
                 {
+                    if( IsExcluded(structure_holder.get()) )
+                    {
+                        continue;
+                    }
+
+                    if( !WillVillageIdEverGenerate( level, resource_location ))
+                    {
+                        Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' won't ever generate in this world (no structure set places it here, no biome here can host it, or structure generation is off). Skipping.", config_entry);
+                        continue;
+                    }
+
+                    village_holders.add(structure_holder.get());
                     continue;
                 }
-
-                if( !WillVillageIdEverGenerate( level, resource_location ))
-                {
-                    Constants.LOG.warn("[Better Village Spawn Point] Structure '{}' won't ever generate in this world (no structure set places it here, no biome here can host it, or structure generation is off). Skipping.", config_entry);
-                    continue;
-                }
-
-                village_holders.add(structure_holder.get());
             }
+
+            TagKey<Structure> tagKey = TagKey.create(Registries.STRUCTURE, resource_location);
+            structureLookup.get(tagKey).ifPresentOrElse(
+                    holders -> holders.forEach(holder ->
+                    {
+                        // A tag is a bulk include, so everything it drags in still has to clear
+                        // the blacklist and still has to be capable of generating in this world.
+                        if( IsExcluded(holder) )
+                            return;
+
+                        Optional<ResourceKey<Structure>> holder_key = holder.unwrapKey();
+                        if( holder_key.isPresent() && !WillVillageIdEverGenerate(level, holder_key.get().location()) )
+                            return;
+
+                        village_holders.add(holder);
+                    }),
+                    () -> Constants.LOG.warn(explicit_tag
+                            ? "[Better Village Spawn Point] Structure tag '{}' not found in registry! Skipping."
+                            : "[Better Village Spawn Point] '{}' is neither a structure ID nor a structure tag in the registry! Skipping.", config_entry)
+                                                       );
         }
 
         // If every configured entry was rejected there is nothing to look for, and running the
@@ -848,10 +854,11 @@ public class VillageLocator
 
     /**
      * The "exclusions" config list is a blacklist applied to everything villageTags expands to
-     * AND to the vanilla-village fallback. Each entry can be:
-     *   - an exact structure id:  minecraft:village_snowy
+     * AND to the vanilla-village fallback. It uses the same format as villageTags. Each entry can be:
      *   - a structure tag:        #minecraft:village   (excludes every structure in the tag)
+     *   - an exact structure id:  minecraft:village_snowy
      *   - a wildcard pattern:     idas:*  or  *:village_*   ('*' matches any run of characters)
+     * The '#' on a tag is optional: a bare entry is matched as an ID and as a tag (see the Holder overload).
      */
     public Boolean IsExcluded( String village_id )
     {
@@ -880,8 +887,10 @@ public class VillageLocator
 
     /**
      * Holder-aware overload. Does everything the String version does, and additionally honours
-     * '#tag' entries by asking the structure whether it is a member of that tag -- which is the
+     * tag entries by asking the structure whether it is a member of that tag -- which is the
      * only way to blacklist a whole tag's worth of structures that villageTags pulled in.
+     * Like villageTags, the leading '#' is optional: a bare entry that didn't match as an ID
+     * is tried as a tag name too.
      */
     public Boolean IsExcluded( Holder<Structure> structure )
     {
@@ -896,13 +905,14 @@ public class VillageLocator
         for( String exclusion_entry : CommonClass.m_Config.GetExclusionsList() )
         {
             String entry = exclusion_entry.trim();
-            if( !entry.startsWith("#") )
-                continue;
+            if( entry.isEmpty() || entry.contains("*") )
+                continue; // wildcards are handled by the String overload above
 
-            ResourceLocation tag_id = ResourceLocation.tryParse(entry.substring(1));
+            boolean explicit_tag = entry.startsWith("#");
+            ResourceLocation tag_id = ResourceLocation.tryParse(explicit_tag ? entry.substring(1) : entry);
             if( tag_id == null )
             {
-                Constants.LOG.warn("[Better Village Spawn Point] Exclusion '{}' is not a valid tag. Ignoring.", entry);
+                Constants.LOG.warn("[Better Village Spawn Point] Exclusion '{}' is not a valid structure ID or tag. Ignoring.", entry);
                 continue;
             }
 
