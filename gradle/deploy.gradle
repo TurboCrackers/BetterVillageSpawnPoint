@@ -64,7 +64,14 @@ def requireInstanceMods = { String path, String instName ->
 // about to write. Otherwise bumping `version` (or minecraft_version) leaves the old
 // jar behind and the loader sees two mods claiming the same mod id.
 def purgeOldDeploys = { String path ->
-    def stale = fileTree(path) { include "${mod_id}-*.jar" }.files
+    // Matched case-insensitively on purpose. Gradle's include patterns are case-sensitive,
+    // and older builds of this mod were named from mod_name ("BetterVillageSpawnPoint-...")
+    // rather than mod_id ("bettervillagespawnpoint-..."). A case-sensitive glob left those
+    // behind next to the new jar, which is a second mod declaring the same mod id.
+    def prefix = "${mod_id}-".toLowerCase()
+    def stale = (file(path).listFiles() ?: new File[0]).findAll {
+        it.isFile() && it.name.toLowerCase().startsWith(prefix) && it.name.toLowerCase().endsWith(".jar")
+    }
     stale.each { logger.lifecycle("Removing stale deploy: ${it.name}") }
     delete stale
 }
