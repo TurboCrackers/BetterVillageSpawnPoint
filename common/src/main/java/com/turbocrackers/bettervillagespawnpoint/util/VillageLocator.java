@@ -168,7 +168,7 @@ public class VillageLocator
         ChunkPos minChunk = new ChunkPos(village_bounding_box.minX() >> 4, village_bounding_box.minZ() >> 4);
         ChunkPos maxChunk = new ChunkPos(village_bounding_box.maxX() >> 4, village_bounding_box.maxZ() >> 4);
         ChunkPos startChunk = village_start.getChunkPos();
-        int maxChunkRadius = Math.max(maxChunk.x - startChunk.x, maxChunk.z - startChunk.z);
+        int maxChunkRadius = Math.max(2, Math.max(Math.abs( maxChunk.x - startChunk.x ), Math.abs( maxChunk.z - startChunk.z )));
         for (int chunk_radius = 0; chunk_radius < maxChunkRadius; ++chunk_radius)
         {
             for (int chunk_dx = -chunk_radius; chunk_dx <= chunk_radius; ++chunk_dx)
