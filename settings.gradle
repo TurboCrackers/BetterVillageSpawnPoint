@@ -50,3 +50,21 @@ include('common')
 include('fabric')
 include('neoforge')
 include('forge')
+include('neoforge')
+include('forge')
+
+// Mojang serves a few Minecraft-only LWJGL artifacts that never reach Maven Central --
+// notably the "natives-macos-patch" classifier MC 1.20.6-1.21.5 pull in. ForgeGradle
+// resolves the Minecraft dependency against the repository list as it stands before the
+// loader build scripts run, so declaring this in a project's own repositories block is
+// too late to be seen. beforeProject registers it early enough, the same way an init
+// script would. Scoped to org.lwjgl so it cannot shadow anything else.
+gradle.beforeProject { p ->
+    p.repositories {
+        maven {
+            name = 'MojangLibraries'
+            url = 'https://libraries.minecraft.net'
+            content { includeGroup('org.lwjgl') }
+        }
+    }
+}
