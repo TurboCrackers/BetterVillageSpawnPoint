@@ -83,7 +83,34 @@ def registerLoader = { Map spec ->
         return
     }
 
+    // Wipe this loader's build/libs before building into it. Gradle leaves previous
+    // artifacts there forever, so the folder accumulates jars from older mod versions --
+    // and, if you switch branches in one clone, from other Minecraft versions entirely.
+    // The Forge and NeoForge deploys glob "*.jar" out of this folder, so a leftover gets
+    // picked up alongside the real jar, renamed to the same filename, and can win:
+    // shipping e.g. a 1.18.2 build labelled 1.21.6.
+    def cleanLibs = tasks.register("clean${name}Libs", Delete) {
+        delete rootProject.project(path).layout.buildDirectory.dir("libs")
+    }
+
+    // dependsOn alone does not order these two, so state the ordering explicitly.
+    // Deleting the jar also makes the producing task out of date, so it genuinely
+    // rebuilds rather than being skipped as UP-TO-DATE with its output missing.
+    // Deferred until every project is evaluated: the producing task may be contributed by
+    // the loader's own plugin (Loom's remapJar, for one) and does not exist yet while this
+    // root script is being evaluated. findByName keeps a renamed task from breaking config.
+    def buildTaskName = spec.buildTask.substring(spec.buildTask.lastIndexOf(':') + 1)
+    gradle.projectsEvaluated {
+        def producer = rootProject.project(path).tasks.findByName(buildTaskName)
+        if (producer != null) {
+            producer.mustRunAfter(cleanLibs)
+        } else {
+            logger.warn("[deploy] ${path} has no task '${buildTaskName}'; cannot order it after clean${name}Libs")
+        }
+    }
+
     tasks.register("build${name}Release") {
+        dependsOn(cleanLibs)
         dependsOn(spec.buildTask)
     }
 
