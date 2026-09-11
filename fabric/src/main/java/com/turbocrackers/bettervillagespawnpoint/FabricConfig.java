@@ -11,18 +11,21 @@ public class FabricConfig extends CommonConfig implements ConfigData
 {
     @ConfigEntry.Gui.Tooltip
     public List<String> villageTags = List.of("#minecraft:village");
-    // Tooltip: List of village IDs or tags to search for as spawn targets.
+    // Tooltip: List of village tags or IDs to search for as spawn targets.
     // Examples: #minecraft:village or minecraft:village_plains.
+    // The leading '#' on a tag is optional: an entry that isn't a structure ID is tried as a tag.
     // Same input used for the /locate structure command.
 
     @ConfigEntry.Gui.Tooltip
     public List<String> exclusions = List.of();
     // Tooltip: Blacklist. Structures that must never be used as the spawn point, even if
-    // villageTags (or the vanilla fallback) would otherwise pick them. Each entry can be
-    // an exact ID (minecraft:village_snowy), a tag (#minecraft:village, which excludes
-    // every structure in that tag), or a wildcard pattern (idas:*, *:village_snowy*).
-    // Example: villageTags = [ "#minecraft:village" ]
-    //          exclusions  = [ "minecraft:village_snowy", "idas:*" ]
+    // villageTags (or the vanilla fallback) would otherwise pick them. Uses the same format
+    // as villageTags. Each entry can be a tag (#minecraft:village, which excludes every
+    // structure in that tag), an exact ID (minecraft:village_snowy), or a wildcard pattern
+    // (idas:*, *:village_snowy*). The leading '#' on a tag is optional: an entry that isn't
+    // a structure ID is tried as a tag.
+    // Example: villageTags = [ "#minecraft:village", "#idas:village" ]
+    //          exclusions  = [ "#idas:desert_village", "minecraft:village_snowy", "ctov:*" ]
 
     @ConfigEntry.Gui.Tooltip
     public boolean useMinecraftVillagesAsFallback = true;
