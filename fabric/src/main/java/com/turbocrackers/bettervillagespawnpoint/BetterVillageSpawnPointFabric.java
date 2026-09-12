@@ -58,7 +58,7 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
     private void registerDebugCommands(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
                 Commands.literal("showBlockDebug")
-                        .requires(source -> source.hasPermission(2))
+                        .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .executes(context -> {
                             ServerLevel level = context.getSource().getLevel();
                             CommonClass.m_BlockDebugger.ToggleBlockFailureDebug(level, true);
@@ -68,7 +68,7 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
 
         dispatcher.register(
                 Commands.literal("hideBlockDebug")
-                        .requires(source -> source.hasPermission(2))
+                        .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .executes(context -> {
                             ServerLevel level = context.getSource().getLevel();
                             CommonClass.m_BlockDebugger.ToggleBlockFailureDebug(level, false);
@@ -78,7 +78,7 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
 
         dispatcher.register(
                 Commands.literal("spawn")
-                        .requires(source -> source.hasPermission(2))
+                        .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                         .executes(context -> {
                             ServerLevel level = context.getSource().getLevel();
                             BlockPos sharedSpawnPos = level.getRespawnData().pos();

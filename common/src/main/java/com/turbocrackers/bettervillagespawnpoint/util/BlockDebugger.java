@@ -47,7 +47,7 @@ public class BlockDebugger
         if( !show )
             return;
 
-        Constants.LOG.info("[Better Village Spawn Point] {} block results in {}:", m_BlockResults.size(), level.dimension().location());
+        Constants.LOG.info("[Better Village Spawn Point] {} block results in {}:", m_BlockResults.size(), level.dimension().identifier());
         for( Pair<BlockPos, BlockResults> block_info : m_BlockResults)
         {
             Constants.LOG.info("[Better Village Spawn Point]   {} -> {}", block_info.getFirst().toShortString(), block_info.getSecond());

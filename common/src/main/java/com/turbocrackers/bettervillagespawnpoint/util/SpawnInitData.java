@@ -4,7 +4,7 @@ import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.block.Block;
@@ -128,7 +128,7 @@ public class SpawnInitData extends SavedData
         this.m_BlockWhitelist = new ArrayList<>();
         for (String block_id_string : block_whitelist_ids)
         {
-            ResourceLocation block_id = ResourceLocation.tryParse(block_id_string);
+            Identifier block_id = Identifier.tryParse(block_id_string);
             if (block_id == null)
                 continue;
 
@@ -143,7 +143,7 @@ public class SpawnInitData extends SavedData
         List<String> ids = new ArrayList<>();
         for (Block block : m_BlockWhitelist)
         {
-            ResourceLocation block_id = BuiltInRegistries.BLOCK.getKey(block);
+            Identifier block_id = BuiltInRegistries.BLOCK.getKey(block);
             if (block_id != null)
                 ids.add(block_id.toString());
         }

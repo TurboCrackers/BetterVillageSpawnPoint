@@ -12,7 +12,7 @@ import org.jetbrains.annotations.Nullable;
 import net.minecraft.core.*;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelData;
@@ -74,7 +74,7 @@ public class VillageLocator
             return false;
         }
 
-        ResourceLocation id = key.get().location();
+        Identifier id = key.get().identifier();
         Constants.LOG.info("[Better Village Spawn Point] Found {} at {}", id.toString(), pos);
         if (findSpawnPosInVillage(level, pos, id.toString()))
         {
@@ -126,7 +126,7 @@ public class VillageLocator
 
         // Search within that chunk for the village
         Registry<Structure> structureRegistry = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
-        ResourceLocation structureId = ResourceLocation.tryParse(nearest_village_tag_or_id);
+        Identifier structureId = Identifier.tryParse(nearest_village_tag_or_id);
         Optional<Holder.Reference<Structure>> structure = structureRegistry.get(structureId);
         if (structure.isEmpty())
         {
@@ -731,7 +731,7 @@ public class VillageLocator
             // 'namespace:name' is a structure ID. The '#' is optional -- a bare entry that
             // isn't a structure ID is tried as a tag before we give up on it.
             boolean explicit_tag = config_entry.startsWith("#");
-            ResourceLocation resource_location = ResourceLocation.tryParse(explicit_tag ? config_entry.substring(1) : config_entry);
+            Identifier resource_location = Identifier.tryParse(explicit_tag ? config_entry.substring(1) : config_entry);
             if (resource_location == null)
             {
                 Constants.LOG.warn("[Better Village Spawn Point] '{}' is not a valid structure ID or tag! Skipping.", config_entry);
@@ -770,7 +770,7 @@ public class VillageLocator
                             return;
 
                         Optional<ResourceKey<Structure>> holder_key = holder.unwrapKey();
-                        if( holder_key.isPresent() && !WillVillageIdEverGenerate(level, holder_key.get().location()) )
+                        if( holder_key.isPresent() && !WillVillageIdEverGenerate(level, holder_key.get().identifier()) )
                             return;
 
                         village_holders.add(holder);
@@ -804,7 +804,7 @@ public class VillageLocator
                 Either<ResourceKey<Structure>, Structure> structure = holder.unwrap();
                 if( structure.left().isPresent() )
                 {
-                    if( WillVillageIdEverGenerate(level, structure.left().get().location() ) )
+                    if( WillVillageIdEverGenerate(level, structure.left().get().identifier() ) )
                     {
                         // The blacklist applies to the fallback too, otherwise excluding a village
                         // just hands it back the moment the primary search comes up empty.
@@ -842,7 +842,7 @@ public class VillageLocator
                 return;
             }
 
-            ResourceLocation id = key.get().location();
+            Identifier id = key.get().identifier();
             Constants.LOG.info("[Better Village Spawn Point] Found {} at {}", id, pos);
             if (findSpawnPosInVillage(level, pos, id.toString()))
             {
@@ -899,7 +899,7 @@ public class VillageLocator
         if( key.isEmpty() )
             return false;
 
-        String id = key.get().location().toString();
+        String id = key.get().identifier().toString();
         if( IsExcluded(id) )
             return true;
 
@@ -910,7 +910,7 @@ public class VillageLocator
                 continue; // wildcards are handled by the String overload above
 
             boolean explicit_tag = entry.startsWith("#");
-            ResourceLocation tag_id = ResourceLocation.tryParse(explicit_tag ? entry.substring(1) : entry);
+            Identifier tag_id = Identifier.tryParse(explicit_tag ? entry.substring(1) : entry);
             if( tag_id == null )
             {
                 Constants.LOG.warn("[Better Village Spawn Point] Exclusion '{}' is not a valid structure ID or tag. Ignoring.", entry);
@@ -943,7 +943,7 @@ public class VillageLocator
         });
     }
 
-    Boolean WillVillageIdEverGenerate( ServerLevel level, ResourceLocation resource_location )
+    Boolean WillVillageIdEverGenerate( ServerLevel level, Identifier resource_location )
     {
         // 1) server / world option
         if (!level.getServer().getWorldData().worldGenOptions().generateStructures()) return false;

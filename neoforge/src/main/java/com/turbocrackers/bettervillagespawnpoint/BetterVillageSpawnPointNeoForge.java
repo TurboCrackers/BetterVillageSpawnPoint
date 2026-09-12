@@ -43,7 +43,7 @@ public class BetterVillageSpawnPointNeoForge
         {
             event.getDispatcher().register(
                     Commands.literal("showBlockDebug")
-                            .requires(source -> source.hasPermission(2))
+                            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                             .executes(context ->
                                       {
                                           ServerLevel level = context.getSource().getLevel();
@@ -53,7 +53,7 @@ public class BetterVillageSpawnPointNeoForge
 
             event.getDispatcher().register(
                     Commands.literal("hideBlockDebug")
-                            .requires(source -> source.hasPermission(2))
+                            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                             .executes(context ->
                                       {
                                           ServerLevel level = context.getSource().getLevel();
@@ -63,7 +63,7 @@ public class BetterVillageSpawnPointNeoForge
 
             event.getDispatcher().register(
                     Commands.literal("spawn")
-                            .requires(source -> source.hasPermission(2))
+                            .requires(Commands.hasPermission(Commands.LEVEL_GAMEMASTERS))
                             .executes(context ->
                                       {
                                           ServerLevel level = context.getSource().getLevel();
