@@ -23,6 +23,12 @@ minecraft {
     runs {
         configureEach {
             args "--mixin.config=${mod_id}.mixins.json", "--mixin.config=${mod_id}.forge.mixins.json"
+
+            // LWJGL must open the window on the process's first thread on macOS. Loom and
+            // ModDevGradle add this flag to their client runs themselves; ForgeGradle 7 does not.
+            if (org.gradle.internal.os.OperatingSystem.current().isMacOsX()) {
+                jvmArgs '-XstartOnFirstThread'
+            }
         }
 
         register('client') {
