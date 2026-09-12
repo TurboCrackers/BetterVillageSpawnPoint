@@ -93,7 +93,7 @@ tasks.register('checkMixinTargets') {
         // 3. One pass over the jar: class hierarchy, declared methods of the targets, and every call site.
         def superOf = [:]                       // class -> superclass
         def declared = [:].withDefault { [] as Set }   // target class -> method names it declares
-        def callers = [:].withDefault { [] as Set }    // "owner.method" -> classes that call it
+        def callSites = [:].withDefault { [] }          // method name -> [callee owner, calling class]
         def targets = hooks.collect { it[1] } as Set
         new ZipFile(mcJar).withCloseable { zip ->
             zip.entries().findAll { it.name.endsWith('.class') }.each { entry ->
@@ -105,7 +105,7 @@ tasks.register('checkMixinTargets') {
                         if (targets.contains(owner)) declared[owner] << name
                         return new MethodVisitor(Opcodes.ASM9) {
                             void visitMethodInsn(int op, String calleeOwner, String callee, String cdesc, boolean itf) {
-                                callers["${calleeOwner}.${callee}"] << owner
+                                callSites[callee] << [calleeOwner, owner]
                             }
                         }
                     }
@@ -113,16 +113,19 @@ tasks.register('checkMixinTargets') {
             }
         }
 
-        // 4. A call through the target class or any of its superclasses counts (virtual dispatch).
+        // 4. Virtual dispatch: a call whose declared owner is the target, one of its superclasses, or
+        //    one of its subclasses can all land in the target's method, so any of those counts.
         def lineage = { String cls -> def out = []; def c = cls; while (c != null) { out << c; c = superOf[c] }; out }
         def problems = []
         hooks.each { file, target, method ->
             if (!superOf.containsKey(target)) { problems << "${file}: target class ${target} is not in ${mcJar.name}"; return }
             if (!declared[target].contains(method)) { problems << "${file}: ${target} has no method named ${method}"; return }
-            def callSites = lineage(target).collectMany { callers["${it}.${method}"] as List } as Set
-            callSites.remove(target)   // a method only ever calling itself is still dead
-            if (callSites.isEmpty()) { problems << "${file}: nothing in vanilla calls ${target}.${method} -- the hook would never run"; return }
-            logger.lifecycle("checkMixinTargets: ${target.tokenize('/').last()}.${method} is live (${callSites.size()} vanilla caller(s), e.g. ${callSites.first().tokenize('/').last()})")
+            def targetLineage = lineage(target)
+            def callers = callSites[method].findAll { site -> targetLineage.contains(site[0]) || lineage(site[0]).contains(target) }
+                                           .collect { it[1] } as Set
+            callers.remove(target)   // a method only ever calling itself is still dead
+            if (callers.isEmpty()) { problems << "${file}: nothing in vanilla calls ${target}.${method} -- the hook would never run"; return }
+            logger.lifecycle("checkMixinTargets: ${target.tokenize('/').last()}.${method} is live (${callers.size()} vanilla caller(s), e.g. ${callers.first().tokenize('/').last()})")
         }
         if (!problems.isEmpty()) throw new GradleException("checkMixinTargets found dead or missing hooks:\n  " + problems.join("\n  "))
     }
