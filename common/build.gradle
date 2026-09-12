@@ -10,9 +10,13 @@ neoForge {
     if (at.exists()) {
         accessTransformers.from(at.absolutePath)
     }
-    parchment {
-        minecraftVersion = parchment_minecraft
-        mappingsVersion = parchment_version
+    // Parchment only adds parameter names; Minecraft ships its own from 26.1, so the
+    // properties are left blank on those branches and the block is skipped.
+    if (parchment_version) {
+        parchment {
+            minecraftVersion = parchment_minecraft
+            mappingsVersion = parchment_version
+        }
     }
 }
 

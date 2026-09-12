@@ -166,8 +166,12 @@ public class SpawnInitData extends SavedData
         return level.getDataStorage().computeIfAbsent(TYPE);
     }
 
+    // 26.1 keys saved data by Identifier and always writes it under a namespace folder, so this
+    // lives at data/bettervillagespawnpoint/spawn_data.dat. Worlds upgraded from 1.21.x still have
+    // the old data/bettervillagespawnpoint_spawn_data.dat, which is simply no longer read: the mod
+    // treats that as a fresh world and re-runs the village search once.
     public static final SavedDataType<SpawnInitData> TYPE = new SavedDataType<>(
-            "bettervillagespawnpoint_spawn_data",
+            Identifier.fromNamespaceAndPath("bettervillagespawnpoint", "spawn_data"),
             () -> new SpawnInitData(false),
             CODEC,
             DataFixTypes.LEVEL

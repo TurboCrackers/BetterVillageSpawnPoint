@@ -97,13 +97,13 @@ public class VillageLocator
         {
             // Make sure the chunk is loaded before we check if the spawn pos is valid
             ChunkPos chunk_pos_spawn_pos = new ChunkPos(save_data.m_VillageSpawnPos.getX() >> 4, save_data.m_VillageSpawnPos.getZ() >> 4);
-            level.getChunk(chunk_pos_spawn_pos.x, chunk_pos_spawn_pos.z);
+            level.getChunk(chunk_pos_spawn_pos.x(), chunk_pos_spawn_pos.z());
 
             if( IsValidSpawnPos( level, save_data.m_VillageSpawnPos.below(), m_BlockWhitelist ) )
                 return;
 
             ChunkPos chunk_pos_village_start = new ChunkPos(save_data.m_VillagePos.getX() >> 4, save_data.m_VillagePos.getZ() >> 4);
-            level.getChunk(chunk_pos_village_start.x, chunk_pos_village_start.z);
+            level.getChunk(chunk_pos_village_start.x(), chunk_pos_village_start.z());
             findSpawnPosInVillage( level, save_data.m_VillagePos, m_VillageID );
         }
         // If it failed, we shouldn't be here. But if we ended up here anyway, just return.
@@ -122,7 +122,7 @@ public class VillageLocator
     {
         // Forcibly load the chunk the village point is in
         ChunkPos chunk_pos = new ChunkPos(nearest_village_coords.getX() >> 4, nearest_village_coords.getZ() >> 4);
-        ChunkAccess chunk = level.getChunk(chunk_pos.x, chunk_pos.z);
+        ChunkAccess chunk = level.getChunk(chunk_pos.x(), chunk_pos.z());
 
         // Search within that chunk for the village
         Registry<Structure> structureRegistry = level.registryAccess().lookupOrThrow(Registries.STRUCTURE);
@@ -161,7 +161,7 @@ public class VillageLocator
         ChunkPos minChunk = new ChunkPos(village_bounding_box.minX() >> 4, village_bounding_box.minZ() >> 4);
         ChunkPos maxChunk = new ChunkPos(village_bounding_box.maxX() >> 4, village_bounding_box.maxZ() >> 4);
         ChunkPos startChunk = village_start.getChunkPos();
-        int maxChunkRadius = Math.max(2, Math.max(Math.abs( maxChunk.x - startChunk.x ), Math.abs( maxChunk.z - startChunk.z )));
+        int maxChunkRadius = Math.max(2, Math.max(Math.abs( maxChunk.x() - startChunk.x() ), Math.abs( maxChunk.z() - startChunk.z() )));
         for (int chunk_radius = 0; chunk_radius < maxChunkRadius; ++chunk_radius)
         {
             for (int chunk_dx = -chunk_radius; chunk_dx <= chunk_radius; ++chunk_dx)
@@ -174,11 +174,11 @@ public class VillageLocator
                         continue;
                     }
 
-                    int chunk_x = startChunk.x + chunk_dx;
-                    int chunk_z = startChunk.z + chunk_dz;
+                    int chunk_x = startChunk.x() + chunk_dx;
+                    int chunk_z = startChunk.z() + chunk_dz;
 
                     // Because our radius is probably bigger in either X or Z, clamp it.
-                    if (chunk_x >= minChunk.x && chunk_x <= maxChunk.x && chunk_z >= minChunk.z && chunk_z <= maxChunk.z)
+                    if (chunk_x >= minChunk.x() && chunk_x <= maxChunk.x() && chunk_z >= minChunk.z() && chunk_z <= maxChunk.z())
                     {
                         // GENERATE THE CHUNK
                         level.getChunkSource().getChunk(chunk_x, chunk_z, ChunkStatus.FULL, true);
@@ -946,7 +946,7 @@ public class VillageLocator
     Boolean WillVillageIdEverGenerate( ServerLevel level, Identifier resource_location )
     {
         // 1) server / world option
-        if (!level.getServer().getWorldData().worldGenOptions().generateStructures()) return false;
+        if (!level.getServer().getWorldGenSettings().options().generateStructures()) return false;
 
         // 2) structure holder
         ResourceKey<Structure> key = ResourceKey.create(Registries.STRUCTURE, resource_location);

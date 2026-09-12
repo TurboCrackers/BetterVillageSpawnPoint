@@ -1,6 +1,8 @@
 plugins {
     id 'multiloader-loader'
-    id 'fabric-loom'
+    // Minecraft is unobfuscated from 26.1 on, so this is the plain (non-remapping) Loom plugin:
+    // no mappings, ordinary implementation dependencies, and jar (not remapJar) is the output.
+    id 'net.fabricmc.fabric-loom'
 }
 
 repositories {
@@ -9,23 +11,16 @@ repositories {
 
 dependencies {
     minecraft "com.mojang:minecraft:${minecraft_version}"
-    mappings loom.layered {
-        officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-${parchment_minecraft}:${parchment_version}@zip")
-    }
-    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
-    modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
+    implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+    implementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 
-    modImplementation "me.shedaniel.cloth:cloth-config-fabric:21.11.153"
+    implementation "me.shedaniel.cloth:cloth-config-fabric:26.1.154"
 }
 
 loom {
     def aw = project(':common').file("src/main/resources/${mod_id}.accesswidener")
     if (aw.exists()) {
         accessWidenerPath.set(aw)
-    }
-    mixin {
-        defaultRefmapName.set("${mod_id}.refmap.json")
     }
     runs {
         client {

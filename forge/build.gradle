@@ -17,9 +17,6 @@ jar {
 }
 
 minecraft {
-    // Forge 1.20.6+ runs on official mappings, so nothing is reobfuscated and no refmap is needed.
-    mappings channel: 'official', version: minecraft_version
-
     runs {
         configureEach {
             args "--mixin.config=${mod_id}.mixins.json", "--mixin.config=${mod_id}.forge.mixins.json"

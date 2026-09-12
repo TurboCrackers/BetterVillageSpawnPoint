@@ -147,11 +147,13 @@ def registerLoader = { Map spec ->
     }
 }
 
-// Loom's remapJar is the obfuscated, distributable Fabric jar.
+// While Minecraft was obfuscated, Loom's remapJar was the distributable Fabric jar. From 26.1
+// nothing is remapped and plain jar is the output; branches set fabric_jar_task accordingly.
+def fabricJarTask = (rootProject.findProperty("fabric_jar_task") ?: "remapJar").toString()
 registerLoader(
         name: "Fabric", projectPath: ":fabric",
-        buildTask: ":fabric:remapJar",
-        jarSource: { project(":fabric").tasks.named("remapJar") },
+        buildTask: ":fabric:${fabricJarTask}",
+        jarSource: { project(":fabric").tasks.named(fabricJarTask) },
         modsDir: instFabricMods, instName: instNameFabric,
         deployedName: "${mod_id}-fabric-${minecraft_version}-${version}.jar")
 
