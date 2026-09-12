@@ -16,6 +16,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.storage.LevelData;
+import net.minecraft.tags.BlockItemTags;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.ChunkPos;
@@ -336,7 +337,7 @@ public class VillageLocator
 
     private static final ArrayList<TagKey<Block>> BODY_BLOCK_TAG_BLACKLIST = new ArrayList<>(Arrays.asList(BlockTags.FENCES,
                                                                                                            BlockTags.WALLS,
-                                                                                                           BlockTags.SAPLINGS,
+                                                                                                           BlockItemTags.SAPLINGS.block(), // 26.2 moved the shared block/item tags to BlockItemTags
                                                                                                            BlockTags.MAINTAINS_FARMLAND
                                                                                                           ));
 
