@@ -4,8 +4,7 @@
   "package": "com.turbocrackers.bettervillagespawnpoint.mixin",
   "compatibilityLevel": "JAVA_18",
   "mixins": [
-    "LevelMixin",
-    "ServerPlayerMixin"
+    "PlayerSpawnFinderMixin"
   ],
   "client": [],
   "injectors": {
