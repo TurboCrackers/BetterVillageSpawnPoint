@@ -1,0 +1,26 @@
+# Builds every loader on every push. Each Minecraft version lives on its own branch, and the
+# workflow file rides along with the branch, so a push to any of them builds that version.
+name: Build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Gradle itself runs on 21 on every branch. Branches that compile for a newer Java declare it
+      # as a toolchain, and the foojay resolver fetches that JDK on demand.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # 'build' rather than 'assemble' so 'check' runs too, which includes checkMixinTargets.
+      - run: ./gradlew build --no-daemon --stacktrace
