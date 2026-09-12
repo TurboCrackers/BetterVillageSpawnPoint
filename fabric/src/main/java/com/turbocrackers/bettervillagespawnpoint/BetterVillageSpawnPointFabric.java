@@ -81,7 +81,7 @@ public class BetterVillageSpawnPointFabric implements ModInitializer
                         .requires(source -> source.hasPermission(2))
                         .executes(context -> {
                             ServerLevel level = context.getSource().getLevel();
-                            BlockPos sharedSpawnPos = level.getSharedSpawnPos();
+                            BlockPos sharedSpawnPos = level.getRespawnData().pos();
                             Objects.requireNonNull(context.getSource().getPlayer())
                                     .teleportTo(sharedSpawnPos.getX() + 0.5, sharedSpawnPos.getY() + 0.1, sharedSpawnPos.getZ() + 0.5);
                             return 1;

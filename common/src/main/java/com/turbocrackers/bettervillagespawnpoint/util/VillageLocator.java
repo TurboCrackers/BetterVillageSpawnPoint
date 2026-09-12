@@ -15,6 +15,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.storage.LevelData;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.level.ChunkPos;
@@ -596,7 +597,7 @@ public class VillageLocator
         m_VillageSpawnPointFailureReason = SpawnInitData.VillageSpawnPointFailureReason.NONE;
         m_VillagePos = village_pos;
         m_VillageID = village_id;
-        level.setDefaultSpawnPos(m_VillageSpawnPos, 0);
+        level.setRespawnData(LevelData.RespawnData.of(level.dimension(), m_VillageSpawnPos, 0.0F, 0.0F));
         Constants.LOG.info("[Better Village Spawn Point] Set spawn to '{}'", pos);
 
         // The overworld is where we save our spawn data
@@ -648,7 +649,7 @@ public class VillageLocator
 
     // True while a village search is running on the server thread. The search generates chunks
     // synchronously, and chunk generation can call back into anything that asks for the world
-    // spawn (our own Level.getSharedSpawnPos / ServerPlayer.adjustSpawnLocation mixins included,
+    // spawn (our own Level.getWorldBorderAdjustedRespawnData / ServerPlayer.adjustSpawnLocation mixins included,
     // and other village mods do it too). If one of those ever re-entered the search it would
     // recurse on the server thread and freeze the client with no crash to point at.
     private boolean m_SearchInProgress = false;

@@ -18,10 +18,10 @@ public abstract class ServerPlayerMixin
        ServerPlayer player = (ServerPlayer)(Object)this;
 
        // Use our village spawn position if that's still what we're using for server spawn.
-       if( level.getSharedSpawnPos().equals(CommonClass.m_VillageLocator.GetVillageSpawnPos()) )
+       if( level.getRespawnData().pos().equals(CommonClass.m_VillageLocator.GetVillageSpawnPos()) )
        {
            CommonClass.m_VillageLocator.RefreshSpawnPos(level);
-           BlockPos shared_spawn_pos = level.getSharedSpawnPos();
+           BlockPos shared_spawn_pos = level.getRespawnData().pos();
 
            //player.setPos( shared_spawn_pos.getX() + 0.5, shared_spawn_pos.getY() + 0.1, shared_spawn_pos.getZ() + 0.5 );
            cir.setReturnValue( shared_spawn_pos );

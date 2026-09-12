@@ -1,8 +1,8 @@
 package com.turbocrackers.bettervillagespawnpoint.util;
 
 import com.mojang.datafixers.util.Pair;
+import com.turbocrackers.bettervillagespawnpoint.Constants;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.protocol.game.DebugPackets;
 import net.minecraft.server.level.ServerLevel;
 
 import java.util.ArrayList;
@@ -40,18 +40,17 @@ public class BlockDebugger
         m_BlockResults.add(new Pair<>(pos, reason));
     }
 
+    // 1.21.9 removed DebugPackets (and with it the game-test marker packets this used to send),
+    // so the per-block results are written to the log instead of drawn in-world.
     public void ToggleBlockFailureDebug( ServerLevel level, Boolean show )
     {
-        if( show )
+        if( !show )
+            return;
+
+        Constants.LOG.info("[Better Village Spawn Point] {} block results in {}:", m_BlockResults.size(), level.dimension().location());
+        for( Pair<BlockPos, BlockResults> block_info : m_BlockResults)
         {
-            for( Pair<BlockPos, BlockResults> block_info : m_BlockResults)
-            {
-                DebugPackets.sendGameTestAddMarker(level, block_info.getFirst(), block_info.getSecond().toString(), 0xFF0000, Integer.MAX_VALUE);
-            }
-        }
-        else
-        {
-            DebugPackets.sendGameTestClearPacket(level);
+            Constants.LOG.info("[Better Village Spawn Point]   {} -> {}", block_info.getFirst().toShortString(), block_info.getSecond());
         }
     }
 }

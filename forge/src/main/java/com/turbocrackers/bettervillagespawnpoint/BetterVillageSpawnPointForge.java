@@ -74,7 +74,7 @@ public class BetterVillageSpawnPointForge
                             .executes(context ->
                                       {
                                           ServerLevel level = context.getSource().getLevel();
-                                          BlockPos shared_spawn_pos = level.getSharedSpawnPos();
+                                          BlockPos shared_spawn_pos = level.getRespawnData().pos();
                                           Objects.requireNonNull(context.getSource().getPlayer()).teleportTo(shared_spawn_pos.getX() + 0.5, shared_spawn_pos.getY() + 0.1, shared_spawn_pos.getZ() + 0.5);
                                           return 1;
                                       }));

@@ -31,7 +31,7 @@ public class CommonClass
 
     public static void SendErrorMessageIfNeeded( ServerPlayer player )
     {
-        Objects.requireNonNull(player.getServer()).execute(() -> {
+        Objects.requireNonNull(player.level().getServer()).execute(() -> {
             if (NEEDS_ERROR_MESSAGE)
             {
                 switch( m_VillageLocator.GetFailureReason() )
