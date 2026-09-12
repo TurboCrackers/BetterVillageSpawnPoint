@@ -40,6 +40,11 @@ public class BlockDebugger
         m_BlockResults.add(new Pair<>(pos, reason));
     }
 
+    public void Clear()
+    {
+        m_BlockResults.clear();
+    }
+
     public void ToggleBlockFailureDebug( ServerLevel level, Boolean show )
     {
         if( show )
