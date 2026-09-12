@@ -9,6 +9,15 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.util.datafix.DataFixTypes;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.SharedConstants;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtOps;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.level.storage.SavedDataStorage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Optional;
+import com.turbocrackers.bettervillagespawnpoint.Constants;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.saveddata.SavedDataType;
 
@@ -163,7 +172,49 @@ public class SpawnInitData extends SavedData
 
     public static SpawnInitData get(ServerLevel level)
     {
-        return level.getDataStorage().computeIfAbsent(TYPE);
+        SavedDataStorage storage = level.getDataStorage();
+        SpawnInitData data = storage.get(TYPE);
+        if( data == null )
+        {
+            data = LoadLegacyRecord(level).orElseGet(() -> new SpawnInitData(false));
+            storage.set(TYPE, data);
+        }
+        return data;
+    }
+
+    // Where every version before 26.1 wrote this record: <world>/data/<name>.dat, keyed by a plain string.
+    private static final String LEGACY_FILE_NAME = "bettervillagespawnpoint_spawn_data";
+
+    /**
+     * 26.1 keys saved data by Identifier and always writes it under a namespace folder, so the record
+     * moved and the old file is never read by vanilla again. Without this, every world upgraded from
+     * 1.21.x would forget its village and re-run the search, possibly settling on a different spawn.
+     * Read the old file once, on the first load that finds no new record; the normal save then writes
+     * it to the new location and the old file is left in place, untouched.
+     */
+    private static Optional<SpawnInitData> LoadLegacyRecord(ServerLevel level)
+    {
+        Path legacy_file = level.getServer().getWorldPath(LevelResource.DATA).resolve(LEGACY_FILE_NAME + ".dat");
+        if( !Files.exists(legacy_file) )
+            return Optional.empty();
+
+        try
+        {
+            CompoundTag tag = level.getDataStorage().readTagFromDisk(legacy_file, DataFixTypes.LEVEL, SharedConstants.getCurrentVersion().dataVersion().version());
+            Optional<SpawnInitData> parsed = CODEC.parse(NbtOps.INSTANCE, tag.get("data"))
+                    .resultOrPartial(error -> Constants.LOG.error("[Better Village Spawn Point] Could not read the pre-26.1 spawn record {}: {}", legacy_file, error));
+            parsed.ifPresent(data ->
+            {
+                data.setDirty();
+                Constants.LOG.info("[Better Village Spawn Point] Migrated the pre-26.1 spawn record from {} (state {}).", legacy_file, data.m_State);
+            });
+            return parsed;
+        }
+        catch( Exception e )
+        {
+            Constants.LOG.error("[Better Village Spawn Point] Could not read the pre-26.1 spawn record {}", legacy_file, e);
+            return Optional.empty();
+        }
     }
 
     // 26.1 keys saved data by Identifier and always writes it under a namespace folder, so this
