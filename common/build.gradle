@@ -1,3 +1,10 @@
+import org.objectweb.asm.ClassReader
+import org.objectweb.asm.ClassVisitor
+import org.objectweb.asm.MethodVisitor
+import org.objectweb.asm.Opcodes
+
+import java.util.zip.ZipFile
+
 plugins {
     id 'multiloader-common'
     id 'org.spongepowered.gradle.vanilla' version '0.2.1-SNAPSHOT'
@@ -30,3 +37,93 @@ artifacts {
     commonJava sourceSets.main.java.sourceDirectories.singleFile
     commonResources sourceSets.main.resources.sourceDirectories.singleFile
 }
+
+// ---------------------------------------------------------------------------------------------
+// Hook liveness check.
+//
+// Neither ForgeGradle 7 nor the unobfuscated Loom validates mixin targets any more. This task reads
+// every @Mixin/@Inject in the common mixins, then scans the Minecraft jar on the compile classpath
+// and fails unless each target method exists AND has at least one call site in vanilla.
+//
+// What it cannot tell you is whether that caller is the path you care about. 1.21.9 moved first-join
+// placement off ServerPlayer.adjustSpawnLocation, but the method stayed reachable from End-portal
+// and respawn code, so this check would have passed while the spawn override did nothing on join.
+// It catches renamed, removed, and genuinely orphaned targets; behaviour still needs a real join.
+// ---------------------------------------------------------------------------------------------
+def mixinSourceDir = file("src/main/java/com/turbocrackers/bettervillagespawnpoint/mixin")
+
+tasks.register('checkMixinTargets') {
+    group = 'verification'
+    description = 'Fails if a common mixin targets a method Minecraft no longer has, or one nothing in vanilla calls.'
+    inputs.dir(mixinSourceDir)
+    inputs.files(configurations.compileClasspath)
+    doLast {
+        // 1. Hooks declared in the mixin sources: [file, target class (internal name), method name].
+        def hooks = []
+        mixinSourceDir.listFiles().findAll { it.name.endsWith('.java') }.sort().each { f ->
+            def src = f.text
+            def target = (src =~ /@Mixin\(\s*([\w.]+)\.class\s*\)/)
+            if (!target.find()) return
+            def simple = target.group(1)
+            def imported = (src =~ /import\s+([\w.]+\.\Q${simple}\E)\s*;/)
+            def internal = (imported.find() ? imported.group(1) : simple).replace('.', '/')
+            (src =~ /@Inject\s*\([^)]*?method\s*=\s*"([^"(]+)/).each { m -> hooks << [f.name, internal, m[1]] }
+        }
+        if (hooks.isEmpty()) throw new GradleException("checkMixinTargets: no @Inject hooks found under ${mixinSourceDir}")
+
+        // 2. The Minecraft jar is whichever classpath entry carries MinecraftServer.
+        def mcJar = configurations.compileClasspath.files.find { jar ->
+            jar.name.endsWith('.jar') && new ZipFile(jar).withCloseable { it.getEntry('net/minecraft/server/MinecraftServer.class') != null }
+        }
+        if (mcJar == null) throw new GradleException("checkMixinTargets: no Minecraft jar on the common compile classpath")
+
+        // 3. One pass over the jar: class hierarchy, declared methods of the targets, and every call site.
+        def parentsOf = [:]                     // class -> [superclass] + interfaces
+        def declared = [:].withDefault { [] as Set }   // target class -> method names it declares
+        def callSites = [:].withDefault { [] }          // method name -> [callee owner, calling class, calling method]
+        def targets = hooks.collect { it[1] } as Set
+        new ZipFile(mcJar).withCloseable { zip ->
+            zip.entries().findAll { it.name.endsWith('.class') }.each { entry ->
+                def reader = new ClassReader(zip.getInputStream(entry).bytes)
+                def owner = reader.className
+                parentsOf[owner] = ([reader.superName] + (reader.interfaces as List)).findAll { it != null }
+                reader.accept(new ClassVisitor(Opcodes.ASM9) {
+                    MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
+                        if (targets.contains(owner)) declared[owner] << name
+                        def callingMethod = name
+                        return new MethodVisitor(Opcodes.ASM9) {
+                            void visitMethodInsn(int op, String calleeOwner, String callee, String cdesc, boolean itf) {
+                                callSites[callee] << [calleeOwner, owner, callingMethod]
+                            }
+                        }
+                    }
+                }, ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES)
+            }
+        }
+
+        // 4. Virtual dispatch: a call whose declared owner is the target, one of its supertypes
+        //    (superclasses AND interfaces: PrimaryLevelData's spawn getters are only ever called
+        //    through LevelData), or one of its subtypes can all land in the target's method.
+        def lineage = { String cls ->
+            def out = []; def queue = [cls]
+            while (!queue.isEmpty()) { def c = queue.remove(0); if (c == null || out.contains(c)) continue; out << c; queue.addAll(parentsOf[c] ?: []) }
+            out
+        }
+        def problems = []
+        hooks.each { file, target, method ->
+            if (!parentsOf.containsKey(target)) { problems << "${file}: target class ${target} is not in ${mcJar.name}"; return }
+            if (!declared[target].contains(method)) { problems << "${file}: ${target} has no method named ${method}"; return }
+            def targetLineage = lineage(target)
+            //    A call from another method of the target class counts too (constructors call
+            //    fudgeSpawnLocation in 1.20); only the method calling itself is discounted.
+            def callers = callSites[method].findAll { site -> targetLineage.contains(site[0]) || lineage(site[0]).contains(target) }
+                                           .findAll { site -> !(site[1] == target && site[2] == method) }
+                                           .collect { it[1] } as Set
+            if (callers.isEmpty()) { problems << "${file}: nothing in vanilla calls ${target}.${method} -- the hook would never run"; return }
+            logger.lifecycle("checkMixinTargets: ${target.tokenize('/').last()}.${method} is live (${callers.size()} vanilla caller(s), e.g. ${callers.first().tokenize('/').last()})")
+        }
+        if (!problems.isEmpty()) throw new GradleException("checkMixinTargets found dead or missing hooks:\n  " + problems.join("\n  "))
+    }
+}
+
+tasks.named('check') { dependsOn 'checkMixinTargets' }
