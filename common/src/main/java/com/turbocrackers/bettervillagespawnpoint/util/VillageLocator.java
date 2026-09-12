@@ -649,7 +649,7 @@ public class VillageLocator
 
     // True while a village search is running on the server thread. The search generates chunks
     // synchronously, and chunk generation can call back into anything that asks for the world
-    // spawn (our own Level.getWorldBorderAdjustedRespawnData / ServerPlayer.adjustSpawnLocation mixins included,
+    // spawn (our own PlayerSpawnFinder.findSpawn mixin included,
     // and other village mods do it too). If one of those ever re-entered the search it would
     // recurse on the server thread and freeze the client with no crash to point at.
     private boolean m_SearchInProgress = false;
