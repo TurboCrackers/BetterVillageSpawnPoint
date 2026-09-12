@@ -17,6 +17,7 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.util.Mth;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
@@ -50,7 +51,8 @@ public class VillageLocator
     private ArrayList<Block> m_BlockWhitelist = new ArrayList<>();
     private BlockPos m_VillagePos = SpawnInitData.NO_POS;
     private String m_VillageID = "";
-    private final BlockDebugger m_BlockDebugger = new BlockDebugger();
+    // The debug commands read CommonClass.m_BlockDebugger, so record into that same instance.
+    private final BlockDebugger m_BlockDebugger = CommonClass.m_BlockDebugger;
 
     @Nullable
     private boolean FindNearestVillageAndSpawn(ServerLevel level, HolderSet<Structure> pStructure, BlockPos origin, int searchRadius, boolean skipKnownStructures)
@@ -119,6 +121,8 @@ public class VillageLocator
 
     private Boolean findSpawnPosInVillage(ServerLevel level, BlockPos nearest_village_coords, String nearest_village_tag_or_id)
     {
+        m_BlockDebugger.Clear(); // one search's worth of results at a time
+
         // Forcibly load the chunk the village point is in
         ChunkPos chunk_pos = new ChunkPos(nearest_village_coords.getX() >> 4, nearest_village_coords.getZ() >> 4);
         ChunkAccess chunk = level.getChunk(chunk_pos.x, chunk_pos.z);
@@ -198,7 +202,7 @@ public class VillageLocator
                                         BlockPos test_pos = new BlockPos(chunkCenterX + x_offset, ocean_floor_y, chunkCenterZ + z_offset);
                                         if (IsValidSpawnPos(level, test_pos, block_whitelist))
                                         {
-                                            SetVillageSpawnPos(level, test_pos, nearest_village_coords, nearest_village_tag_or_id);
+                                            SetVillageSpawnPos(level, test_pos, nearest_village_coords, nearest_village_tag_or_id, village_bounding_box);
                                             return true;
                                         }
                                     }
@@ -271,7 +275,7 @@ public class VillageLocator
                         test_pos.set(block_x, block_y, block_z);
                         if (IsValidSpawnPos(level, test_pos, block_whitelist))
                         {
-                            SetVillageSpawnPos(level, test_pos, village_pos, village_id);
+                            SetVillageSpawnPos(level, test_pos, village_pos, village_id, village_bounding_box);
                             return true;
                         }
                     }
@@ -587,7 +591,7 @@ public class VillageLocator
         return true;
     }
 
-    private void SetVillageSpawnPos(ServerLevel level, BlockPos pos, BlockPos village_pos, String village_id)
+    private void SetVillageSpawnPos(ServerLevel level, BlockPos pos, BlockPos village_pos, String village_id, BoundingBox village_bounding_box)
     {
         CommonClass.NEEDS_ERROR_MESSAGE = false;
         m_BlockDebugger.AddBlockResult(pos, BlockDebugger.BlockResults.SUCCESS);
@@ -596,8 +600,16 @@ public class VillageLocator
         m_VillageSpawnPointFailureReason = SpawnInitData.VillageSpawnPointFailureReason.NONE;
         m_VillagePos = village_pos;
         m_VillageID = village_id;
-        level.setDefaultSpawnPos(m_VillageSpawnPos, 0);
-        Constants.LOG.info("[Better Village Spawn Point] Set spawn to '{}'", pos);
+
+        // Face the player into the village instead of due south. Same convention as Entity.lookAt:
+        // yaw 0 looks toward +Z and increases clockwise when seen from above.
+        BlockPos village_center = village_bounding_box.getCenter();
+        double dx = village_center.getX() - m_VillageSpawnPos.getX();
+        double dz = village_center.getZ() - m_VillageSpawnPos.getZ();
+        float yaw = (dx == 0 && dz == 0) ? 0.0F : Mth.wrapDegrees((float)Math.toDegrees(Math.atan2(-dx, dz)));
+
+        level.setDefaultSpawnPos(m_VillageSpawnPos, yaw);
+        Constants.LOG.info("[Better Village Spawn Point] Set spawn to {} (standing on {}), facing the village centre at {}", m_VillageSpawnPos.toShortString(), pos.toShortString(), village_center.toShortString());
 
         // The overworld is where we save our spawn data
         SpawnInitData data = SpawnInitData.get(level);
