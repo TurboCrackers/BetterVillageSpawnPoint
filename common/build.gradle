@@ -91,7 +91,7 @@ tasks.register('checkMixinTargets') {
         if (mcJar == null) throw new GradleException("checkMixinTargets: no Minecraft jar on the common compile classpath")
 
         // 3. One pass over the jar: class hierarchy, declared methods of the targets, and every call site.
-        def superOf = [:]                       // class -> superclass
+        def parentsOf = [:]                     // class -> [superclass] + interfaces
         def declared = [:].withDefault { [] as Set }   // target class -> method names it declares
         def callSites = [:].withDefault { [] }          // method name -> [callee owner, calling class, calling method]
         def targets = hooks.collect { it[1] } as Set
@@ -99,7 +99,7 @@ tasks.register('checkMixinTargets') {
             zip.entries().findAll { it.name.endsWith('.class') }.each { entry ->
                 def reader = new ClassReader(zip.getInputStream(entry).bytes)
                 def owner = reader.className
-                superOf[owner] = reader.superName
+                parentsOf[owner] = ([reader.superName] + (reader.interfaces as List)).findAll { it != null }
                 reader.accept(new ClassVisitor(Opcodes.ASM9) {
                     MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
                         if (targets.contains(owner)) declared[owner] << name
@@ -114,12 +114,17 @@ tasks.register('checkMixinTargets') {
             }
         }
 
-        // 4. Virtual dispatch: a call whose declared owner is the target, one of its superclasses, or
-        //    one of its subclasses can all land in the target's method, so any of those counts.
-        def lineage = { String cls -> def out = []; def c = cls; while (c != null) { out << c; c = superOf[c] }; out }
+        // 4. Virtual dispatch: a call whose declared owner is the target, one of its supertypes
+        //    (superclasses AND interfaces: PrimaryLevelData's spawn getters are only ever called
+        //    through LevelData), or one of its subtypes can all land in the target's method.
+        def lineage = { String cls ->
+            def out = []; def queue = [cls]
+            while (!queue.isEmpty()) { def c = queue.remove(0); if (c == null || out.contains(c)) continue; out << c; queue.addAll(parentsOf[c] ?: []) }
+            out
+        }
         def problems = []
         hooks.each { file, target, method ->
-            if (!superOf.containsKey(target)) { problems << "${file}: target class ${target} is not in ${mcJar.name}"; return }
+            if (!parentsOf.containsKey(target)) { problems << "${file}: target class ${target} is not in ${mcJar.name}"; return }
             if (!declared[target].contains(method)) { problems << "${file}: ${target} has no method named ${method}"; return }
             def targetLineage = lineage(target)
             //    A call from another method of the target class counts too (constructors call
