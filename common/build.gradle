@@ -93,7 +93,7 @@ tasks.register('checkMixinTargets') {
         // 3. One pass over the jar: class hierarchy, declared methods of the targets, and every call site.
         def superOf = [:]                       // class -> superclass
         def declared = [:].withDefault { [] as Set }   // target class -> method names it declares
-        def callSites = [:].withDefault { [] }          // method name -> [callee owner, calling class]
+        def callSites = [:].withDefault { [] }          // method name -> [callee owner, calling class, calling method]
         def targets = hooks.collect { it[1] } as Set
         new ZipFile(mcJar).withCloseable { zip ->
             zip.entries().findAll { it.name.endsWith('.class') }.each { entry ->
@@ -103,9 +103,10 @@ tasks.register('checkMixinTargets') {
                 reader.accept(new ClassVisitor(Opcodes.ASM9) {
                     MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
                         if (targets.contains(owner)) declared[owner] << name
+                        def callingMethod = name
                         return new MethodVisitor(Opcodes.ASM9) {
                             void visitMethodInsn(int op, String calleeOwner, String callee, String cdesc, boolean itf) {
-                                callSites[callee] << [calleeOwner, owner]
+                                callSites[callee] << [calleeOwner, owner, callingMethod]
                             }
                         }
                     }
@@ -121,9 +122,11 @@ tasks.register('checkMixinTargets') {
             if (!superOf.containsKey(target)) { problems << "${file}: target class ${target} is not in ${mcJar.name}"; return }
             if (!declared[target].contains(method)) { problems << "${file}: ${target} has no method named ${method}"; return }
             def targetLineage = lineage(target)
+            //    A call from another method of the target class counts too (constructors call
+            //    fudgeSpawnLocation in 1.20); only the method calling itself is discounted.
             def callers = callSites[method].findAll { site -> targetLineage.contains(site[0]) || lineage(site[0]).contains(target) }
+                                           .findAll { site -> !(site[1] == target && site[2] == method) }
                                            .collect { it[1] } as Set
-            callers.remove(target)   // a method only ever calling itself is still dead
             if (callers.isEmpty()) { problems << "${file}: nothing in vanilla calls ${target}.${method} -- the hook would never run"; return }
             logger.lifecycle("checkMixinTargets: ${target.tokenize('/').last()}.${method} is live (${callers.size()} vanilla caller(s), e.g. ${callers.first().tokenize('/').last()})")
         }
