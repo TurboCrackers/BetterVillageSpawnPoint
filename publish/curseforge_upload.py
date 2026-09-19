@@ -51,6 +51,13 @@ def version_ids(mc):
     env = [pick("Client", lambda tname, tid: tname == "Environment"), pick("Server", lambda tname, tid: tname == "Environment")]
     return mc_id, java_id, java, loaders, env
 
+def for_curseforge(text):
+    """CurseForge shows the file's version and game version itself, so drop the GitHub release's
+    leading title line and the bold markers; keep the rest of the markdown as is."""
+    lines = text.strip().splitlines()
+    while lines and (lines[0].startswith("#") or not lines[0].strip()): lines.pop(0)
+    return "\n".join(lines).replace("**", "").strip() + "\n"
+
 def loader_of(filename):
     n = filename.lower()
     return "neoforge" if "neoforge" in n else "fabric" if "fabric" in n else "forge"
@@ -74,7 +81,7 @@ def main():
     ap.add_argument("--release-type", default="release", choices=["release", "beta", "alpha"]); ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
     mc_id, java_id, java, loaders, env = version_ids(a.mc)
-    changelog = Path(a.changelog).read_text()
+    changelog = for_curseforge(Path(a.changelog).read_text())
     jars = sorted(Path(a.jars_dir).glob("*.jar"))
     if not jars: sys.exit("no jars found")
     print(f"project {PROJECT_ID}, Minecraft {a.mc} (id {mc_id}), {java} (id {java_id}), loaders {loaders}, environment {env}, release type {a.release_type}")
