@@ -3,7 +3,7 @@
 The same changelog is kept on every branch. Entries note which Minecraft releases they apply to
 when it is not all of them.
 
-## 1.0.4
+## 3.0
 
 ### Fixed
 - The village search could end up with a chunk radius of 0 for small villages, or villages whose
