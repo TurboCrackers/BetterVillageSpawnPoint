@@ -22,3 +22,7 @@ build
 eclipse
 run
 runs
+
+# qa harness scratch
+qa/.worktrees
+qa/reports
