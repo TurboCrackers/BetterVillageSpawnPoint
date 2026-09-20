@@ -33,6 +33,10 @@ when it is not all of them.
 
 ### Build
 - Ports for 1.21.7 through 26.2, one branch each. See `BRANCHES.md` for the toolchain boundaries.
+- Ports for 1.16.5 (Fabric and Forge) and 1.12.2 (Forge), one branch each. Both take structure
+  IDs or names rather than tags, which those versions do not have: `minecraft:village` on 1.16.5,
+  `Village` on 1.12.2 (the newer spellings are accepted and mapped). 1.12.2 has no Mixin, so the
+  spawn placement runs from Forge's player-load and respawn events.
 - `checkMixinTargets` verifies at build time that every common mixin hook targets a method that
   still exists and that vanilla still calls somewhere.
 - A GitHub Actions workflow builds every loader on push.
