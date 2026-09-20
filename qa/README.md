@@ -24,6 +24,7 @@ paths without needing to click on a bed.
     python3 qa/run_matrix.py --instances 1.21.6-NeoForge # one instance
     python3 qa/run_matrix.py --loader forge              # every Forge instance
     python3 qa/run_matrix.py --fetch-fabric-deps         # Fabric instances need Fabric API + Cloth Config
+    python3 qa/run_matrix.py --scenario join             # launch + first join + one death only
 
 Requirements: Prism Launcher installed at its default path, a logged-in Prism account, each
 instance able to launch on its own (Java set up), and the RCON/server ports 25575 and 25565 free.

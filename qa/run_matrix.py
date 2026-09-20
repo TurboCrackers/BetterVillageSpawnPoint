@@ -28,8 +28,9 @@ PRISM_EXE = Path("/Applications/Prism Launcher.app/Contents/MacOS/prismlauncher"
 RCON_PORT, RCON_PASS, SERVER_PORT = 25575, "bvsp-qa", 25565
 MODRINTH = {"fabric-api": "P7dR8mSH", "cloth-config": "9s6osm5g"}
 LOADERS = {  # loader uid fragment -> (deploy task, gradle run task, candidate run dirs, jar name fragment)
+    # ForgeGradle names its run tasks after the taskName in forge/build.gradle ("Server"), not runServer
     "net.fabricmc.fabric-loader": ("deployFabricToInstance", ":fabric:runServer", ["fabric/runs/server"], "fabric"),
-    "net.minecraftforge":         ("deployForgeToInstance",  ":forge:runServer",  ["forge/runs/server", "forge/run"], "forge"),
+    "net.minecraftforge":         ("deployForgeToInstance",  ":forge:Server",     ["forge/runs/server", "forge/run"], "forge"),
     "net.neoforged":              ("deployNeoToInstance",    ":neoforge:runServer", ["neoforge/runs/server", "neoforge/run"], "neoforge"),
 }
 
@@ -275,6 +276,7 @@ class Target:
             self.step("first join lands on village spawn", self.near(jp, vs, xz=1.0, y=2.0), f"joined at {self.fmt(jp)}, village spawn {self.fmt(vs)}")
             self.kill_player(); p = self.pos()
             self.step("die with no respawn point -> village spawn", self.near(p, vs, xz=2.5), f"respawned at {self.fmt(p)}, {dist_xz(p, vs):.1f} blocks from spawn" if p else "no position")
+            if self.args.scenario == "join": return
             bed = (vs[0] + 6, vs[1], vs[2] + 6)
             rcon(f"spawnpoint {self.player} {int(bed[0])} {int(bed[1])} {int(bed[2])}")
             self.kill_player(); p = self.pos()
@@ -337,6 +339,7 @@ def main():
     ap.add_argument("--fetch-fabric-deps", action="store_true", help="download Fabric API and Cloth Config from Modrinth into Fabric instances that lack them")
     ap.add_argument("--skip-restart", action="store_true", help="skip the server-restart part of the scenario")
     ap.add_argument("--keep-world", action="store_true", help="reuse the server world instead of generating a new one")
+    ap.add_argument("--scenario", choices=["full", "join"], default="full", help="'join' stops after the first join and one death (launch + village spawn check only)")
     ap.add_argument("--server-timeout", type=int, default=600); ap.add_argument("--join-timeout", type=int, default=420)
     args = ap.parse_args()
     global REPORTS_DIR, SUMMARY, START_TIME

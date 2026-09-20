@@ -44,7 +44,8 @@ def version_ids(mc):
         return c[0]["id"]
     # the Minecraft version lives under a "Minecraft 1.21"-style family type (or "26.2" for the new scheme), not the generic type 1
     mc_id = pick(mc, lambda tname, tid: tid != 1 and (tname.startswith("Minecraft") or re.match(r"^\d", tname)))
-    java = next(j for prefix, j in JAVA_FOR.items() if mc.startswith(prefix))
+    # "1.19" (a major release with no patch number) must match the "1.19." rule, hence the trailing dot
+    java = next(j for prefix, j in JAVA_FOR.items() if (mc + ".").startswith(prefix))
     java_id = pick(java, lambda tname, tid: tname == "Java")
     loaders = {k: pick(v, lambda tname, tid: tname == "Modloader") for k, v in LOADER_OF.items()}
     # CurseForge requires an environment tag; the mod runs in singleplayer (integrated server) and on dedicated servers
