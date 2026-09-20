@@ -14,7 +14,7 @@ from pathlib import Path
 
 API = "https://minecraft.curseforge.com/api"
 PROJECT_ID = 1319614  # better-village-spawn-point
-JAVA_FOR = {"26.": "Java 25", "1.21.": "Java 21", "1.20.6": "Java 21", "1.20.5": "Java 21", "1.20.": "Java 17", "1.19.": "Java 17", "1.18.": "Java 17"}
+JAVA_FOR = {"26.": "Java 25", "1.21.": "Java 21", "1.20.6": "Java 21", "1.20.5": "Java 21", "1.20.": "Java 17", "1.19.": "Java 17", "1.18.": "Java 17", "1.16.": "Java 8", "1.12.": "Java 8"}
 LOADER_OF = {"fabric": "Fabric", "neoforge": "NeoForge", "forge": "Forge"}
 FABRIC_DEPS = [{"slug": "fabric-api", "type": "requiredDependency"}, {"slug": "cloth-config", "type": "requiredDependency"}]
 
