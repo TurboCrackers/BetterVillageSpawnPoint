@@ -16,7 +16,10 @@ dependencies {
     modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
     modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_version}"
 
-    modImplementation "me.shedaniel.cloth:cloth-config-fabric:${cloth_config_api_version}"
+    // Cloth Config 8.x declares a 1.19.1 Fabric API in its POM; keep the 1.19 build pinned above
+    modImplementation("me.shedaniel.cloth:cloth-config-fabric:${cloth_config_api_version}") {
+        exclude group: "net.fabricmc.fabric-api"
+    }
 }
 
 loom {
