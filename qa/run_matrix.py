@@ -28,9 +28,10 @@ PRISM_EXE = Path("/Applications/Prism Launcher.app/Contents/MacOS/prismlauncher"
 RCON_PORT, RCON_PASS, SERVER_PORT = 25575, "bvsp-qa", 25565
 MODRINTH = {"fabric-api": "P7dR8mSH", "cloth-config": "9s6osm5g"}
 LOADERS = {  # loader uid fragment -> (deploy task, gradle run task, candidate run dirs, jar name fragment)
-    # ForgeGradle names its run tasks after the taskName in forge/build.gradle ("Server"), not runServer
+    # ForgeGradle 6 names its run tasks after the taskName in forge/build.gradle ("Server"); ForgeGradle 7
+    # (1.21.11 and newer) and ModDevGradle's legacyforge use runServer. forge_run_task() picks per worktree.
     "net.fabricmc.fabric-loader": ("deployFabricToInstance", ":fabric:runServer", ["fabric/runs/server"], "fabric"),
-    "net.minecraftforge":         ("deployForgeToInstance",  ":forge:Server",     ["forge/runs/server", "forge/run"], "forge"),
+    "net.minecraftforge":         ("deployForgeToInstance",  ":forge:runServer",  ["forge/runs/server", "forge/run"], "forge"),
     "net.neoforged":              ("deployNeoToInstance",    ":neoforge:runServer", ["neoforge/runs/server", "neoforge/run"], "neoforge"),
 }
 
@@ -117,6 +118,12 @@ def client_pids(inst_id):
     r = subprocess.run(["pgrep", "-fi", f"instances/{inst_id}/"], capture_output=True, text=True)
     return [int(p) for p in r.stdout.split() if p.strip()]
 
+def forge_run_task(worktree):
+    """ForgeGradle 6 registers the server run under the taskName given in forge/build.gradle ("Server");
+    ForgeGradle 7 and ModDevGradle's legacyforge register runServer."""
+    bg = worktree / "forge" / "build.gradle"
+    return ":forge:Server" if bg.exists() and re.search(r"taskName\s+['\"]Server['\"]", bg.read_text()) else ":forge:runServer"
+
 # ----------------------------------------------------------------------------- one target
 class Target:
     def __init__(self, inst, args):
@@ -140,6 +147,7 @@ class Target:
         else:
             sh(["git", "checkout", "-q", "--detach", self.mc], cwd=self.wt)
         self.log(f"worktree at {self.wt} on {self.mc} ({sh(['git','rev-parse','--short','HEAD'], cwd=self.wt).stdout.strip()})")
+        if self.jar_frag == "forge": self.run_task = forge_run_task(self.wt)
 
     def deploy(self):
         if self.args.skip_deploy: return
