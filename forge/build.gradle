@@ -1,5 +1,5 @@
 plugins {
-    id 'multiloader-loader'
+    id 'multiloader-common'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
     id 'org.spongepowered.mixin' version '0.7-SNAPSHOT'
 }
@@ -14,6 +14,9 @@ mixin {
 }
 
 minecraft {
+    // On 1.16.5 the 'official' channel gives Mojang's field and method names but keeps MCP's
+    // class names (net.minecraft.world.server.ServerWorld, not net.minecraft.server.level.ServerLevel).
+    // Forge only adopted Mojang's class names in 1.17.
     mappings channel: 'official', version: minecraft_version
 
     copyIdeResources = true //Calls processResources when in dev
@@ -57,9 +60,122 @@ minecraft {
 
 sourceSets.main.resources.srcDir 'src/generated/resources'
 
+// ---------------------------------------------------------------------------------------------
+// The common module is written against Mojang's class names (VanillaGradle and Loom both use
+// them), but Forge 1.16.5 compiles against MCP's class names with Mojang member names. Rather
+// than keep a second copy of every common class, the common sources are copied into
+// build/generated/mcpCommon with the class names translated, and that copy is compiled here.
+// Only class names differ; every method and field keeps its Mojang name. A common class that
+// uses a Mojang class name missing from this table fails to compile here, which is the cue to
+// add its MCP counterpart.
+// ---------------------------------------------------------------------------------------------
+configurations {
+    commonJava {
+        canBeResolved = true
+    }
+    commonResources {
+        canBeResolved = true
+    }
+}
+
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
     annotationProcessor("org.spongepowered:mixin:0.8.5-SNAPSHOT:processor")
+
+    commonJava project(path: ':common', configuration: 'commonJava')
+    commonResources project(path: ':common', configuration: 'commonResources')
+}
+
+// Mojang -> MCP (1.16.5). Fully-qualified names first, then simple names on a word boundary.
+def mcpClassNames = [
+        'net.minecraft.ChatFormatting'                                : 'net.minecraft.util.text.TextFormatting',
+        'net.minecraft.Util'                                          : 'net.minecraft.util.Util',
+        'net.minecraft.core.BlockPos'                                 : 'net.minecraft.util.math.BlockPos',
+        'net.minecraft.core.Direction'                                : 'net.minecraft.util.Direction',
+        'net.minecraft.core.Registry'                                 : 'net.minecraft.util.registry.Registry',
+        'net.minecraft.core.SectionPos'                               : 'net.minecraft.util.math.SectionPos',
+        'net.minecraft.nbt.CompoundTag'                               : 'net.minecraft.nbt.CompoundNBT',
+        'net.minecraft.nbt.ListTag'                                   : 'net.minecraft.nbt.ListNBT',
+        'net.minecraft.nbt.StringTag'                                 : 'net.minecraft.nbt.StringNBT',
+        'net.minecraft.network.chat.TextComponent'                    : 'net.minecraft.util.text.StringTextComponent',
+        'net.minecraft.network.chat.Component'                        : 'net.minecraft.util.text.ITextComponent',
+        'net.minecraft.network.protocol.game.DebugPackets'            : 'net.minecraft.network.DebugPacketSender',
+        'net.minecraft.resources.ResourceLocation'                    : 'net.minecraft.util.ResourceLocation',
+        'net.minecraft.server.level.ServerLevel'                      : 'net.minecraft.world.server.ServerWorld',
+        'net.minecraft.server.level.ServerPlayer'                     : 'net.minecraft.entity.player.ServerPlayerEntity',
+        'net.minecraft.tags.Tag'                                      : 'net.minecraft.tags.ITag',
+        'net.minecraft.util.Mth'                                      : 'net.minecraft.util.math.MathHelper',
+        'net.minecraft.world.level.ChunkPos'                          : 'net.minecraft.util.math.ChunkPos',
+        'net.minecraft.world.level.Level'                             : 'net.minecraft.world.World',
+        'net.minecraft.world.level.biome.Biome'                       : 'net.minecraft.world.biome.Biome',
+        'net.minecraft.world.level.block.state.BlockState'            : 'net.minecraft.block.BlockState',
+        'net.minecraft.world.level.block.Block'                       : 'net.minecraft.block.Block',
+        'net.minecraft.world.level.block.Blocks'                      : 'net.minecraft.block.Blocks',
+        'net.minecraft.world.level.block.BushBlock'                   : 'net.minecraft.block.BushBlock',
+        'net.minecraft.world.level.block.DoublePlantBlock'            : 'net.minecraft.block.DoublePlantBlock',
+        'net.minecraft.world.level.chunk.ChunkAccess'                 : 'net.minecraft.world.chunk.IChunk',
+        'net.minecraft.world.level.chunk.ChunkGenerator'              : 'net.minecraft.world.gen.ChunkGenerator',
+        'net.minecraft.world.level.chunk.ChunkStatus'                 : 'net.minecraft.world.chunk.ChunkStatus',
+        'net.minecraft.world.level.levelgen.Heightmap'                : 'net.minecraft.world.gen.Heightmap',
+        'net.minecraft.world.level.levelgen.feature.StructureFeature' : 'net.minecraft.world.gen.feature.structure.Structure',
+        'net.minecraft.world.level.levelgen.structure.BoundingBox'    : 'net.minecraft.util.math.MutableBoundingBox',
+        'net.minecraft.world.level.levelgen.structure.StructureStart' : 'net.minecraft.world.gen.feature.structure.StructureStart',
+        'net.minecraft.world.level.material.FluidState'               : 'net.minecraft.fluid.FluidState',
+        'net.minecraft.world.level.saveddata.SavedData'               : 'net.minecraft.world.storage.WorldSavedData',
+        'net.minecraft.world.level.storage.PrimaryLevelData'          : 'net.minecraft.world.storage.ServerWorldInfo',
+        'net.minecraft.world.phys.shapes.Shapes'                      : 'net.minecraft.util.math.shapes.VoxelShapes',
+        'net.minecraft.world.phys.shapes.VoxelShape'                  : 'net.minecraft.util.math.shapes.VoxelShape',
+]
+// Simple-name and inner-class renames, applied after the imports. Same-named classes need no entry.
+def mcpSimpleNames = [
+        'BlockPos\\.MutableBlockPos' : 'BlockPos.Mutable',
+        'Heightmap\\.Types'          : 'Heightmap.Type',
+        '\\bPrimaryLevelData\\b'     : 'ServerWorldInfo',
+        '\\bServerLevel\\b'          : 'ServerWorld',
+        '\\bServerPlayer\\b'         : 'ServerPlayerEntity',
+        '\\bLevel\\b'                : 'World',
+        '\\bChatFormatting\\b'       : 'TextFormatting',
+        '\\bTextComponent\\b'        : 'StringTextComponent',
+        '\\bComponent\\b'            : 'ITextComponent',
+        '\\bDebugPackets\\b'         : 'DebugPacketSender',
+        '\\bCompoundTag\\b'          : 'CompoundNBT',
+        '\\bListTag\\b'              : 'ListNBT',
+        '\\bStringTag\\b'            : 'StringNBT',
+        '\\bTag\\b'                  : 'ITag',
+        '\\bMth\\b'                  : 'MathHelper',
+        '\\bChunkAccess\\b'          : 'IChunk',
+        '\\bStructureFeature\\b'     : 'Structure',
+        '\\bBoundingBox\\b'          : 'MutableBoundingBox',
+        '\\bSavedData\\b'            : 'WorldSavedData',
+        '\\bShapes\\b'               : 'VoxelShapes',
+]
+
+def translateCommon = tasks.register('translateCommonToMcpNames', Sync) {
+    group = 'build'
+    description = 'Copies the common sources with Mojang class names translated to the MCP names Forge 1.16.5 uses.'
+    dependsOn(configurations.commonJava)
+    from(configurations.commonJava)
+    into(layout.buildDirectory.dir('generated/mcpCommon'))
+    inputs.property('mcpClassNames', mcpClassNames)
+    inputs.property('mcpSimpleNames', mcpSimpleNames)
+    filter { String line ->
+        def out = line
+        mcpClassNames.each { mojang, mcp -> out = out.replace(mojang, mcp) }
+        mcpSimpleNames.each { pattern, mcp -> out = out.replaceAll(pattern, mcp) }
+        out
+    }
+}
+
+sourceSets.main.java.srcDir(translateCommon)
+
+processResources {
+    dependsOn(configurations.commonResources)
+    from(configurations.commonResources)
+}
+
+tasks.named('sourcesJar', Jar) {
+    dependsOn(configurations.commonResources)
+    from(configurations.commonResources)
 }
 
 jar.finalizedBy('reobfJar')
@@ -72,8 +188,6 @@ publishing {
     }
 }
 
-sourceSets.each {
-    def dir = layout.buildDirectory.dir("sourcesSets/$it.name")
-    it.output.resourcesDir = dir
-    it.java.destinationDirectory = dir
-}
+// The newer branches merge the source set's class and resource outputs into one directory for the
+// dev client. FML 36 (1.16.5) fails to discover the @Mod class from a merged directory ("constructed
+// 0 mods"), so the outputs stay separate here; ForgeGradle 6 lists both for the run.

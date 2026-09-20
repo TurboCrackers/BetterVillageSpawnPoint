@@ -6,7 +6,6 @@ import net.minecraft.core.Registry;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
-import net.minecraft.nbt.Tag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
@@ -42,6 +41,10 @@ public class SpawnInitData extends SavedData
      */
     public static final BlockPos NO_POS = new BlockPos(0, Integer.MIN_VALUE, 0);
 
+    // NBT tag type ids (Tag.TAG_LIST / TAG_STRING only exist from 1.17).
+    private static final int TAG_STRING = 8;
+    private static final int TAG_LIST = 9;
+
     public boolean m_Initialized = false;
     public VillageSpawnPointState m_State = VillageSpawnPointState.NOT_STARTED;
     public BlockPos m_VillageSpawnPos = BlockPos.ZERO;
@@ -52,31 +55,56 @@ public class SpawnInitData extends SavedData
     public String m_VillageID = "";
     public static String SAVE_DATA_ID = "bettervillagespawnpoint_spawn_data";
 
-    public static SpawnInitData load(CompoundTag tag) {
+    public SpawnInitData()
+    {
+        super(SAVE_DATA_ID);
+    }
+
+    // 1.16.5 saved data is loaded through an instance method rather than a static factory.
+    @Override
+    public void load(CompoundTag tag)
+    {
         Constants.LOG.info("[Better Village Spawn Point] Spawn data loaded.");
-        SpawnInitData data = new SpawnInitData();
-        data.m_State = VillageSpawnPointState.valueOf(tag.getString("VillageSpawnPointState"));
-        data.m_VillageSpawnPos = new BlockPos(tag.getInt("VillageSpawnPosX"), tag.getInt("VillageSpawnPosY"), tag.getInt("VillageSpawnPosZ"));
-        data.m_VillagePos = new BlockPos(tag.getInt("VillagePosX"), tag.getInt("VillagePosY"), tag.getInt("VillagePosZ"));
-        data.m_VillageID = tag.getString("VillageID");
-        data.m_SentFailureMessage = tag.getBoolean("VillageSpawnFailureMessageSent");
-        data.m_FailureReason = VillageSpawnPointFailureReason.valueOf(tag.getString("VillageSpawnFailureReason"));
+        m_State = EnumOrDefault(VillageSpawnPointState.class, tag.getString("VillageSpawnPointState"), VillageSpawnPointState.NOT_STARTED);
+        m_VillageSpawnPos = new BlockPos(tag.getInt("VillageSpawnPosX"), tag.getInt("VillageSpawnPosY"), tag.getInt("VillageSpawnPosZ"));
+        m_VillagePos = new BlockPos(tag.getInt("VillagePosX"), tag.getInt("VillagePosY"), tag.getInt("VillagePosZ"));
+        m_VillageID = tag.getString("VillageID");
+        m_SentFailureMessage = tag.getBoolean("VillageSpawnFailureMessageSent");
+        m_FailureReason = EnumOrDefault(VillageSpawnPointFailureReason.class, tag.getString("VillageSpawnFailureReason"), VillageSpawnPointFailureReason.NONE);
 
         // Load the block whitelist
-        data.m_BlockWhitelist = new ArrayList<>();
-        if (tag.contains("BlockWhitelist", Tag.TAG_LIST)) {
-            ListTag blockListTag = tag.getList("BlockWhitelist", Tag.TAG_STRING);
+        m_BlockWhitelist = new ArrayList<>();
+        if (tag.contains("BlockWhitelist", TAG_LIST)) {
+            ListTag blockListTag = tag.getList("BlockWhitelist", TAG_STRING);
             for (int i = 0; i < blockListTag.size(); i++) {
                 String blockIdString = blockListTag.getString(i);
                 ResourceLocation blockId = ResourceLocation.tryParse(blockIdString);
+                if (blockId == null)
+                    continue;
                 Block block = Registry.BLOCK.get(blockId);
 
                 if (block != Blocks.AIR) { // Ensure it's valid
-                    data.m_BlockWhitelist.add(block);
+                    m_BlockWhitelist.add(block);
                 }
             }
         }
-        return data;
+    }
+
+    /**
+     * Tolerate a name we do not recognise instead of failing the whole load. Failure reasons have
+     * been added and renamed across versions, and one stale name in an old save should not cost
+     * the player their recorded village spawn.
+     */
+    private static <E extends Enum<E>> E EnumOrDefault(Class<E> type, String name, E fallback)
+    {
+        try
+        {
+            return Enum.valueOf(type, name);
+        }
+        catch (IllegalArgumentException ignored)
+        {
+            return fallback;
+        }
     }
 
     @Override
@@ -115,6 +143,6 @@ public class SpawnInitData extends SavedData
 
     public static SpawnInitData get(ServerLevel level)
     {
-        return level.getDataStorage().computeIfAbsent(SpawnInitData::load, SpawnInitData::new, SAVE_DATA_ID);
+        return level.getDataStorage().computeIfAbsent(SpawnInitData::new, SAVE_DATA_ID);
     }
 }

@@ -4,28 +4,28 @@ import me.shedaniel.autoconfig.ConfigData;
 import me.shedaniel.autoconfig.annotation.Config;
 import me.shedaniel.autoconfig.annotation.ConfigEntry;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Config(name = "bettervillagespawnpoint")
 public class FabricConfig extends CommonConfig implements ConfigData
 {
     @ConfigEntry.Gui.Tooltip
-    public List<String> villageTags = List.of("#minecraft:village");
-    // Tooltip: List of village tags or IDs to search for as spawn targets.
-    // Examples: #minecraft:village or minecraft:village_plains.
-    // The leading '#' on a tag is optional: an entry that isn't a structure ID is tried as a tag.
-    // Same input used for the /locate structure command.
+    public List<String> villageTags = new ArrayList<>(Arrays.asList("minecraft:village"));
+    // Tooltip: List of structure IDs to search for as spawn targets.
+    // Examples: minecraft:village or repurposed_structures:village_badlands.
+    // Same input used for the /locate command. 1.16.5 has no structure tags, and the per-biome
+    // village variants (minecraft:village_plains ...) cannot be searched for on this version.
 
     @ConfigEntry.Gui.Tooltip
-    public List<String> exclusions = List.of();
+    public List<String> exclusions = new ArrayList<>();
     // Tooltip: Blacklist. Structures that must never be used as the spawn point, even if
     // villageTags (or the vanilla fallback) would otherwise pick them. Uses the same format
-    // as villageTags. Each entry can be a tag (#minecraft:village, which excludes every
-    // structure in that tag), an exact ID (minecraft:village_snowy), or a wildcard pattern
-    // (idas:*, *:village_snowy*). The leading '#' on a tag is optional: an entry that isn't
-    // a structure ID is tried as a tag.
-    // Example: villageTags = [ "#minecraft:village", "#idas:village" ]
-    //          exclusions  = [ "#idas:desert_village", "minecraft:village_snowy", "ctov:*" ]
+    // as villageTags. Each entry can be an exact ID (minecraft:village) or a wildcard pattern
+    // (repurposed_structures:*, *:village_*).
+    // Example: villageTags = [ "minecraft:village", "repurposed_structures:village_badlands" ]
+    //          exclusions  = [ "repurposed_structures:village_*" ]
 
     @ConfigEntry.Gui.Tooltip
     public boolean useMinecraftVillagesAsFallback = true;

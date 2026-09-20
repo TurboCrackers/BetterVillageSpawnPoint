@@ -3,6 +3,8 @@ package com.turbocrackers.bettervillagespawnpoint;
 import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ModConfig;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class ForgeConfig extends CommonConfig
@@ -17,26 +19,24 @@ public class ForgeConfig extends CommonConfig
     static
     {
         STRUCTURE_IDS = BUILDER
-                .comment("List of village tags and/or IDs to search for as spawn targets.\nExamples: #minecraft:village or minecraft:village_plains.\nThe leading '#' on a tag is optional: an entry that isn't a structure ID is tried as a tag.\nThis is the same input that you would use for the /locate structure command\nTo find all of the village structure IDs/tags, open the game and type '/locate structure' and then scroll through the options to find structure IDs that you want. Use '/locate structure #' to find village tags.")
+                .comment("List of structure IDs to search for as spawn targets.\nExamples: minecraft:village or repurposed_structures:village_badlands.\nThis is the same input that you would use for the /locate command: open the game and type '/locate ' and scroll through the options to find the structure IDs you want.\n1.16.5 has no structure tags, and the per-biome village variants (minecraft:village_plains ...) cannot be searched for on this version; minecraft:village covers all of them.")
                 .defineList(
                         "villageTags",
-                        List.of(
-                                "#minecraft:village"
+                        Arrays.asList(
+                                "minecraft:village"
                                ),
                         o -> o instanceof String
                            );
 
         EXCLUSION_IDS = BUILDER
                 .comment("\nBlacklist: structures that must never be used as the spawn point, even if villageTags (or the vanilla fallback) would otherwise pick them.\n" +
-                         "Uses the same format as villageTags. Each entry can be a tag (#minecraft:village, which excludes every structure in that tag),\n" +
-                         "an exact ID (minecraft:village_snowy), or a wildcard pattern (idas:*, *:village_snowy*).\n" +
-                         "The leading '#' on a tag is optional: an entry that isn't a structure ID is tried as a tag.\n" +
-                         "Example: villageTags = [ \"#minecraft:village\", \"#idas:village\" ]\n" +
-                         "         exclusions  = [ \"#idas:desert_village\", \"minecraft:village_snowy\", \"ctov:*\" ]\n" +
+                         "Uses the same format as villageTags. Each entry can be an exact ID (minecraft:village) or a wildcard pattern (repurposed_structures:*, *:village_*).\n" +
+                         "Example: villageTags = [ \"minecraft:village\", \"repurposed_structures:village_badlands\" ]\n" +
+                         "         exclusions  = [ \"repurposed_structures:village_*\" ]\n" +
                          "This also applies to the vanilla fallback if you are using it." )
                 .defineList(
                         "exclusions",
-                        List.<String>of(),
+                        Collections.<String>emptyList(),
                         o -> o instanceof String
                            );
 

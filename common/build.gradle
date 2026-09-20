@@ -18,6 +18,14 @@ minecraft {
     }
 }
 
+repositories {
+    // 1.16.5's library set (oshi-core 1.1, among others) is only published on Mojang's maven.
+    maven {
+        name = 'Mojang'
+        url = 'https://libraries.minecraft.net/'
+    }
+}
+
 dependencies {
     compileOnly group:'org.spongepowered', name:'mixin', version:'0.8.5'
 }
