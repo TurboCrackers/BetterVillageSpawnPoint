@@ -14,7 +14,7 @@ propagated backwards by cherry-picking (`git cherry-pick -x`) and compiling on e
 | 1.20.2, 1.20.3, 1.20.4, 1.20.6, 1.21.1, 1.21.3 to 1.21.8 | Fabric, Forge and NeoForge. Common source is identical across these, so cherry-picks apply cleanly. |
 | 1.21.9, 1.21.10 | World spawn is `LevelData.RespawnData`. New players are placed by `PlayerSpawnFinder.findSpawn`, which the spawn mixin hooks. Gradle 8.14, Loom 1.11. |
 | 1.21.11 | `ResourceLocation` became `Identifier`. Commands use `Commands.hasPermission`. Gradle 9, ForgeGradle 7 (no MixinGradle, no Mixin annotation processor on Forge). |
-| 26.1, 26.1.1, 26.1.2, 26.2 | Minecraft is unobfuscated and targets Java 25. Fabric uses the plain `net.fabricmc.fabric-loom` plugin with `implementation` dependencies and `jar` output. No Parchment. Saved data is keyed by `Identifier` and lives under `data/bettervillagespawnpoint/`; a pre-26.1 record is migrated on first load. |
+| 26.1, 26.1.1, 26.1.2, 26.2, 26.3 | Minecraft is unobfuscated and targets Java 25. Fabric uses the plain `net.fabricmc.fabric-loom` plugin with `implementation` dependencies and `jar` output. No Parchment. Saved data is keyed by `Identifier` and lives under `data/bettervillagespawnpoint/`; a pre-26.1 record is migrated on first load. |
 
 ## Things that are the same everywhere
 
