@@ -1,0 +1,16 @@
+[
+{
+  "modid": "${mod_id}",
+  "name": "${mod_name}",
+  "description": "${description}",
+  "version": "${version}",
+  "mcversion": "${minecraft_version}",
+  "url": "https://www.curseforge.com/minecraft/mc-mods/better-village-spawn-point",
+  "updateUrl": "",
+  "authorList": ["${mod_author}"],
+  "credits": "${credits}",
+  "logoFile": "",
+  "screenshots": [],
+  "dependencies": []
+}
+]

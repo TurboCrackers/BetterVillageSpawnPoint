@@ -88,9 +88,6 @@ processResources {
             'group'                        : project.group, //Else we target the task's group.
             'minecraft_version'            : minecraft_version,
             'minecraft_version_range'      : minecraft_version_range,
-            'fabric_version'               : fabric_version,
-            'fabric_loader_version'        : fabric_loader_version,
-            'cloth_config_api_version'     : cloth_config_api_version,
             'mod_name'                     : mod_name,
             'mod_author'                   : mod_author,
             'mod_id'                       : mod_id,
@@ -100,19 +97,15 @@ processResources {
             "forge_loader_version_range": forge_loader_version_range,
             'credits'                      : credits,
             'java_version'                 : java_version,
-            'java_version_name'            : java_version_name,
-            'loom_version'                 : loom_version
+            'java_version_name'            : java_version_name
     ]
 
     var jsonExpandProps = expandProps.collectEntries {
         key, value -> [(key): value instanceof String ? value.replace("\n", "\\\\n") : value]
     }
 
-    filesMatching(['META-INF/mods.toml', 'META-INF/neoforge.mods.toml']) {
-        expand expandProps
-    }
-
-    filesMatching(['pack.mcmeta', 'fabric.mod.json', '*.mixins.json']) {
+    // 1.12.2 declares the mod in mcmod.info (JSON) rather than mods.toml.
+    filesMatching(['pack.mcmeta', 'mcmod.info']) {
         expand jsonExpandProps
     }
 

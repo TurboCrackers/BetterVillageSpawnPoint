@@ -1,70 +1,69 @@
 package com.turbocrackers.bettervillagespawnpoint;
 
-import net.minecraftforge.common.ForgeConfigSpec;
-import net.minecraftforge.fml.ModLoadingContext;
-import net.minecraftforge.fml.config.ModConfig;
+import net.minecraftforge.common.config.Config;
+import net.minecraftforge.common.config.ConfigManager;
+import net.minecraftforge.fml.client.event.ConfigChangedEvent;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+
+import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 1.12.2 uses Forge's annotation config (config/BetterVillageSpawnPoint-common.cfg). The option
+ * names match the newer branches' TOML so a config can be carried across versions by hand.
+ */
+@Config(modid = Constants.MOD_ID, name = "BetterVillageSpawnPoint-common")
 public class ForgeConfig extends CommonConfig
 {
-    private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
-    private static final ForgeConfigSpec CONFIG;
-    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> STRUCTURE_IDS;
-    private static final ForgeConfigSpec.ConfigValue<List<? extends String>> EXCLUSION_IDS;
-    private static final ForgeConfigSpec.ConfigValue<Boolean> USE_MINECRAFT_VILLAGE_FALLBACK;
-    private static final ForgeConfigSpec.ConfigValue<Integer> SEARCH_RADIUS;
+    @Config.Name("villageTags")
+    @Config.Comment({
+            "List of structure names to search for as spawn targets, as the chunk generator knows them.",
+            "1.12.2 has no structure registry or tags: vanilla names are Village, Mineshaft, Stronghold, Temple, Monument, Mansion and Fortress,",
+            "and mods that add villages use their own names (as accepted by /locate).",
+            "A namespaced entry from a newer config (minecraft:village, #minecraft:village) is mapped to the vanilla name."})
+    public static String[] villageTags = { "Village" };
 
-    static
+    @Config.Name("exclusions")
+    @Config.Comment({
+            "Blacklist: structures that must never be used as the spawn point, even if villageTags (or the vanilla fallback) would otherwise pick them.",
+            "Uses the same format as villageTags. Each entry can be an exact name (Village) or a wildcard pattern (*Village*).",
+            "This also applies to the vanilla fallback if you are using it."})
+    public static String[] exclusions = {};
+
+    @Config.Name("useMinecraftVillagesAsFallback")
+    @Config.Comment("If you customized the villageTags list and no spawn point could be found, minecraft's vanilla villages will be used as a fallback.")
+    public static boolean useMinecraftVillagesAsFallback = true;
+
+    @Config.Name("villageSearchRadius")
+    @Config.Comment({
+            "The distance we should search from (0, 0, 0) for a village.",
+            "Vanilla 1.12.2 walks outward one village region (32 chunks) at a time and gives up after 100 regions, so this caps",
+            "the search in the same units as the newer branches: villageSearchRadius / 16 regions."})
+    public static int villageSearchRadius = 2000;
+
+    @Mod.EventBusSubscriber(modid = Constants.MOD_ID)
+    private static class Handler
     {
-        STRUCTURE_IDS = BUILDER
-                .comment("List of village tags and/or IDs to search for as spawn targets.\nExamples: #minecraft:village or minecraft:village_plains.\nThe leading '#' on a tag is optional: an entry that isn't a structure ID is tried as a tag.\nThis is the same input that you would use for the /locate structure command\nTo find all of the village structure IDs/tags, open the game and type '/locate structure' and then scroll through the options to find structure IDs that you want. Use '/locate structure #' to find village tags.")
-                .defineList(
-                        "villageTags",
-                        List.of(
-                                "#minecraft:village"
-                               ),
-                        o -> o instanceof String
-                           );
-
-        EXCLUSION_IDS = BUILDER
-                .comment("\nBlacklist: structures that must never be used as the spawn point, even if villageTags (or the vanilla fallback) would otherwise pick them.\n" +
-                         "Uses the same format as villageTags. Each entry can be a tag (#minecraft:village, which excludes every structure in that tag),\n" +
-                         "an exact ID (minecraft:village_snowy), or a wildcard pattern (idas:*, *:village_snowy*).\n" +
-                         "The leading '#' on a tag is optional: an entry that isn't a structure ID is tried as a tag.\n" +
-                         "Example: villageTags = [ \"#minecraft:village\", \"#idas:village\" ]\n" +
-                         "         exclusions  = [ \"#idas:desert_village\", \"minecraft:village_snowy\", \"ctov:*\" ]\n" +
-                         "This also applies to the vanilla fallback if you are using it." )
-                .defineList(
-                        "exclusions",
-                        List.<String>of(),
-                        o -> o instanceof String
-                           );
-
-        USE_MINECRAFT_VILLAGE_FALLBACK = BUILDER
-                .comment("If you customized the villageTags list and no spawn point could be found, minecraft's vanilla villages will be used as a fallback.")
-                .define("useMinecraftVillagesAsFallback", true );
-
-        SEARCH_RADIUS = BUILDER
-                .comment("The distance we should search from (0, 0, 0) for a village.")
-                .define("villageSearchRadius", 2000 );
-
-        CONFIG = BUILDER.build();
-    }
-
-    public void RegisterConfig(ModLoadingContext context)
-    {
-        context.registerConfig(ModConfig.Type.COMMON, CONFIG, "BetterVillageSpawnPoint-common.toml");
+        @SubscribeEvent
+        public static void onConfigChanged(ConfigChangedEvent.OnConfigChangedEvent event)
+        {
+            if (event.getModID().equals(Constants.MOD_ID))
+            {
+                ConfigManager.sync(Constants.MOD_ID, Config.Type.INSTANCE);
+            }
+        }
     }
 
     @Override
-    public int GetSearchRadius() { return SEARCH_RADIUS.get(); }
+    public int GetSearchRadius() { return villageSearchRadius; }
 
     @Override
-    public Boolean UseVanillaFallback() { return USE_MINECRAFT_VILLAGE_FALLBACK.get(); }
+    public Boolean UseVanillaFallback() { return useMinecraftVillagesAsFallback; }
 
     @Override
-    public List<? extends String> GetStructureList() { return STRUCTURE_IDS.get(); }
+    public List<? extends String> GetStructureList() { return Arrays.asList(villageTags); }
 
     @Override
-    public List<? extends String> GetExclusionsList() { return EXCLUSION_IDS.get(); }
+    public List<? extends String> GetExclusionsList() { return Arrays.asList(exclusions); }
 }

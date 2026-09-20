@@ -1,20 +1,14 @@
 plugins {
-    id 'multiloader-loader'
+    id 'multiloader-common'
     id 'net.minecraftforge.gradle' version '[6.0,6.2)'
-    id 'org.spongepowered.mixin' version '0.7-SNAPSHOT'
 }
 base {
     archivesName = "${mod_name}-forge-${minecraft_version}"
 }
-mixin {
-    add(sourceSets.main, "${mod_id}.refmap.json")
-
-    config("${mod_id}.mixins.json")
-    config("${mod_id}.forge.mixins.json")
-}
 
 minecraft {
-    mappings channel: 'official', version: minecraft_version
+    // 1.12.2 predates the official Mojang mappings; MCP 'stable' names are the only option.
+    mappings channel: mcp_mappings_channel, version: mcp_mappings_version
 
     copyIdeResources = true //Calls processResources when in dev
 
@@ -40,29 +34,30 @@ minecraft {
                 }
             }
         }
-
-        data {
-            workingDirectory file('runs/data')
-            ideaModule "${rootProject.name}.${project.name}.main"
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
-            taskName 'Data'
-            mods {
-                modDataRun {
-                    source sourceSets.main
-                }
-            }
-        }
     }
 }
 
-sourceSets.main.resources.srcDir 'src/generated/resources'
-
 dependencies {
     minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
-    annotationProcessor("org.spongepowered:mixin:0.8.5-SNAPSHOT:processor")
 }
 
 jar.finalizedBy('reobfJar')
+
+// @Mod on 1.12.2 takes its version from a compile-time constant (there is no mods.toml to
+// expand), so make sure Constants.MOD_VERSION and gradle.properties' version never drift apart.
+tasks.register('checkModVersionConstant') {
+    group = 'verification'
+    description = 'Fails if Constants.MOD_VERSION does not match the version in gradle.properties.'
+    def constants = file('src/main/java/com/turbocrackers/bettervillagespawnpoint/Constants.java')
+    inputs.file(constants)
+    inputs.property('version', version)
+    doLast {
+        def m = (constants.text =~ /MOD_VERSION\s*=\s*"([^"]+)"/)
+        if (!m.find()) throw new GradleException("checkModVersionConstant: no MOD_VERSION constant in ${constants}")
+        if (m.group(1) != version.toString()) throw new GradleException("checkModVersionConstant: Constants.MOD_VERSION is ${m.group(1)} but gradle.properties says ${version}")
+    }
+}
+tasks.named('check') { dependsOn 'checkModVersionConstant' }
 
 publishing {
     publications {

@@ -3,6 +3,7 @@ package com.turbocrackers.bettervillagespawnpoint.platform;
 import com.turbocrackers.bettervillagespawnpoint.Constants;
 import com.turbocrackers.bettervillagespawnpoint.platform.services.IPlatformHelper;
 
+import java.util.Iterator;
 import java.util.ServiceLoader;
 
 // Service loaders are a built-in Java feature that allow us to locate implementations of an interface that vary from one
@@ -21,9 +22,12 @@ public class Services {
     // example our file on Forge points to ForgePlatformHelper while Fabric points to FabricPlatformHelper.
     public static <T> T load(Class<T> clazz) {
 
-        final T loadedService = ServiceLoader.load(clazz)
-                .findFirst()
-                .orElseThrow(() -> new NullPointerException("Failed to load service for " + clazz.getName()));
+        // ServiceLoader.findFirst() is Java 9; this branch compiles for Java 8.
+        Iterator<T> services = ServiceLoader.load(clazz).iterator();
+        if (!services.hasNext()) {
+            throw new NullPointerException("Failed to load service for " + clazz.getName());
+        }
+        final T loadedService = services.next();
         Constants.LOG.debug("Loaded {} for service {}", loadedService, clazz);
         return loadedService;
     }

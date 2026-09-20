@@ -1,26 +1,26 @@
 package com.turbocrackers.bettervillagespawnpoint;
 
+import com.turbocrackers.bettervillagespawnpoint.command.DebugCommands;
 import com.turbocrackers.bettervillagespawnpoint.util.BlockDebugger;
-import com.turbocrackers.bettervillagespawnpoint.util.SpawnInitData;
-import com.turbocrackers.bettervillagespawnpoint.util.VillageLocator;
-import net.minecraft.ChatFormatting;
-import net.minecraft.commands.Commands;
-import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
+import com.turbocrackers.bettervillagespawnpoint.util.SpawnPlacement;
+import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.server.MinecraftServer;
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.RegisterCommandsEvent;
-import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
-import net.minecraftforge.event.server.ServerStartedEvent;
-import net.minecraftforge.eventbus.api.SubscribeEvent;
-import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.common.FMLCommonHandler;
 import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.common.event.FMLServerStartedEvent;
+import net.minecraftforge.fml.common.event.FMLServerStartingEvent;
+import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
+import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerLoggedInEvent;
+import net.minecraftforge.fml.common.gameevent.PlayerEvent.PlayerRespawnEvent;
 
-import java.util.Objects;
-
-@Mod(Constants.MOD_ID)
+@Mod(modid = Constants.MOD_ID,
+     name = Constants.MOD_NAME,
+     version = Constants.MOD_VERSION,
+     acceptedMinecraftVersions = "[1.12.2]",
+     // The mod only acts on the server; clients without it can still join.
+     acceptableRemoteVersions = "*")
 public class BetterVillageSpawnPointForge
 {
     public BetterVillageSpawnPointForge()
@@ -28,63 +28,65 @@ public class BetterVillageSpawnPointForge
         // Init our common class
         CommonClass.init();
 
-        // Load config
+        // Load config (Forge's annotation config is populated by FML; this just exposes it)
         CommonClass.m_Config = new ForgeConfig();
-        ModLoadingContext context = ModLoadingContext.get();
-        ((ForgeConfig)CommonClass.m_Config).RegisterConfig(context);
 
         // Start listening for Forge events.
         MinecraftForge.EVENT_BUS.register(this);
     }
 
-    @SubscribeEvent
-    public void onServerStarted(ServerStartedEvent event)
-    {
-        event.getServer().execute(() -> CommonClass.m_VillageLocator.FindVillageAndSpawn(event.getServer()));
-    }
-
-    @SubscribeEvent
-    public void registerCommands(RegisterCommandsEvent event)
+    @Mod.EventHandler
+    public void onServerStarting(FMLServerStartingEvent event)
     {
         if (BlockDebugger.DEBUG_ENABLED)
         {
-            event.getDispatcher().register(
-                    Commands.literal("showBlockDebug")
-                            .requires(source -> source.hasPermission(2))
-                            .executes(context ->
-                                      {
-                                          ServerLevel level = context.getSource().getLevel();
-                                          CommonClass.m_BlockDebugger.ToggleBlockFailureDebug(level, true);
-                                          return 1;
-                                      }));
-
-            event.getDispatcher().register(
-                    Commands.literal("hideBlockDebug")
-                            .requires(source -> source.hasPermission(2))
-                            .executes(context ->
-                                      {
-                                          ServerLevel level = context.getSource().getLevel();
-                                          CommonClass.m_BlockDebugger.ToggleBlockFailureDebug(level, false);
-                                          return 1;
-                                      }));
-
-            event.getDispatcher().register(
-                    Commands.literal("spawn")
-                            .requires(source -> source.hasPermission(2))
-                            .executes(context ->
-                                      {
-                                          net.minecraft.server.level.ServerLevel overworld = context.getSource().getServer().overworld();
-                                          var data = overworld.getLevelData();
-                                          BlockPos shared_spawn_pos = new BlockPos( data.getXSpawn(), data.getYSpawn(), data.getZSpawn() );
-                                          Objects.requireNonNull(context.getSource().getPlayerOrException()).teleportTo(shared_spawn_pos.getX() + 0.5, shared_spawn_pos.getY() + 0.1, shared_spawn_pos.getZ() + 0.5);
-                                          return 1;
-                                      }));
+            DebugCommands.Register(event);
         }
     }
 
-    @SubscribeEvent
-    public void onPlayerLogin(PlayerEvent.PlayerLoggedInEvent event)
+    @Mod.EventHandler
+    public void onServerStarted(FMLServerStartedEvent event)
     {
-        CommonClass.SendErrorMessageIfNeeded( (ServerPlayer)event.getEntity() );
+        MinecraftServer server = FMLCommonHandler.instance().getMinecraftServerInstance();
+        server.addScheduledTask(() -> CommonClass.m_VillageLocator.FindVillageAndSpawn(server));
+    }
+
+    @SubscribeEvent
+    public void onPlayerLogin(PlayerLoggedInEvent event)
+    {
+        if (event.player instanceof EntityPlayerMP)
+        {
+            CommonClass.SendErrorMessageIfNeeded( (EntityPlayerMP)event.player );
+        }
+    }
+
+    /**
+     * 1.12.2 has no Mixin on Forge, so the two places the newer branches hook through
+     * ServerPlayer.fudgeSpawnLocation are handled as events instead. This one is the new-player
+     * case: it fires from PlayerList.readPlayerDataFromFile, after the EntityPlayerMP constructor
+     * has already scattered the player around the world spawn and before anything is sent to the
+     * client, so moving the player here is invisible.
+     */
+    @SubscribeEvent
+    public void onPlayerLoad(PlayerEvent.LoadFromFile event)
+    {
+        if (event.getEntityPlayer() instanceof EntityPlayerMP)
+        {
+            SpawnPlacement.OnPlayerLoaded( (EntityPlayerMP)event.getEntityPlayer(), event.getPlayerDirectory(), event.getPlayerUUID() );
+        }
+    }
+
+    /**
+     * The respawn case (death, or leaving the End) with no usable bed. Vanilla has already put the
+     * new player entity at a random spot around the world spawn and sent the respawn packet, so
+     * the player is teleported onto the village spawn.
+     */
+    @SubscribeEvent
+    public void onPlayerRespawn(PlayerRespawnEvent event)
+    {
+        if (event.player instanceof EntityPlayerMP)
+        {
+            SpawnPlacement.OnPlayerRespawned( (EntityPlayerMP)event.player );
+        }
     }
 }
